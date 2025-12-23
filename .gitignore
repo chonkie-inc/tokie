@@ -28,5 +28,6 @@ target
 # Model files
 models/
 .DS_Store
-work.log
-ENCODE_ITER_DESIGN.md
+
+# Benchmark data (download instructions in benches/tokenize.rs)
+benches/data/

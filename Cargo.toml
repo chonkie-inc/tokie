@@ -6,29 +6,43 @@ description = "Fast BPE tokenizer using Aho-Corasick automata"
 license = "AGPL-3.0"
 
 [dependencies]
+crc32fast = "1.4"
 daggrs = { path = "../daggrs" }
 fnv = "1.0"
-rayon = "1.10"
+memchr = "2.7.6"
+memchunk = "0.1.6"
+regex-automata = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+unicode-general-category = "1.0"
 
 [dev-dependencies]
-bpe = { path = "../rust-gems/crates/bpe" }
-kitoken = { path = "../kitoken", default-features = false, features = ["std", "convert-tokenizers"] }
+criterion = "0.5"
+tokenizers = "0.22"
 tiktoken-rs = "0.9"
+pcre2 = "0.2"
+logos = "0.15"
+
+[[bench]]
+name = "tokenize"
+harness = false
 
 [[example]]
-name = "gpt2_benchmark"
-path = "examples/gpt2_benchmark.rs"
+name = "piece_analysis"
 
 [[example]]
-name = "compare_bpe"
-path = "examples/compare_bpe.rs"
+name = "regex_bench"
 
-[[example]]
-name = "compare_all"
-path = "examples/compare_all.rs"
+[dev-dependencies.quick_cache]
+version = "0.6"
 
-[[example]]
-name = "parallel_benchmark"
-path = "examples/parallel_benchmark.rs"
+[dev-dependencies.moka]
+version = "0.12"
+default-features = false
+features = ["sync"]
+
+[dev-dependencies.mini-moka]
+version = "0.10"
+
+[dev-dependencies.dashmap]
+version = "6"
