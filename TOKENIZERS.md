@@ -58,7 +58,7 @@ This document lists tokenizers and their compatibility with tokie.
 | Meta | Llama 3 | 128,000 | Backtracking | ✅ | 15ms | 610 MB/s | ~100x |
 | Meta | Llama 3.1 | 128,000 | Backtracking | ✅ | 15ms | 610 MB/s | ~100x |
 | Meta | Llama 3.2 | 128,000 | Backtracking | ✅ | 15ms | 610 MB/s | ~100x |
-| Meta | Llama 4 | ~128,000 | Backtracking | - | - | - | - |
+| Meta | Llama 4 | 200,000 | Simple | ✅ | - | - | - |
 | Meta | RoBERTa | 50,265 | Simple | ✅ | 9ms | 319 MB/s | ~50x |
 | Meta | XLM-RoBERTa | 250,002 | Unigram | ✅ | 23ms | 54 MB/s | ~15x |
 | Microsoft | Phi-1/2 | 51,200 | Backtracking | ✅ | 5ms | 282 MB/s | ~50x |
@@ -142,7 +142,6 @@ Cohere embedding models use a proprietary tokenizer format that hasn't been anal
 | Medium | Kimi K2 | tiktoken.model format + Chinese regex | Medium |
 | Medium | DeepSeek V2/V3 | Complex pretokenizer | Medium |
 | Medium | Falcon | ByteLevel config | Low |
-| Medium | Llama 4 | Not tested | Low |
 | Medium | Command R | Not implemented | Low |
 | Low | InternLM | Not implemented | Low |
 | Low | ChatGLM | Not implemented | Low |

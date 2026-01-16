@@ -14,7 +14,6 @@
 
 use daggrs::{DoubleArrayAhoCorasick, MatchKind, Trie};
 use foldhash::HashMap as FoldHashMap;
-use memchunk::chunk;
 use smallvec::SmallVec;
 
 use crate::types::TokenId;

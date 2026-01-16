@@ -204,14 +204,24 @@ fn are_merges_topological(
     num_base_tokens: usize,
 ) -> bool {
     for (merge_idx, merge) in merges_arr.iter().enumerate() {
-        let Some(s) = merge.as_str() else {
-            continue;
-        };
-        let mut parts = s.split(' ');
-        let Some(left_str) = parts.next() else {
-            continue;
-        };
-        let Some(right_str) = parts.next() else {
+        // Extract left and right token strings from merge
+        // Handle both string format ("Ġ Ġ") and array format (["Ġ", "Ġ"])
+        let (left_str, right_str) = if let Some(arr) = merge.as_array() {
+            if arr.len() >= 2 {
+                match (arr[0].as_str(), arr[1].as_str()) {
+                    (Some(l), Some(r)) => (l, r),
+                    _ => continue,
+                }
+            } else {
+                continue;
+            }
+        } else if let Some(s) = merge.as_str() {
+            let mut parts = s.split(' ');
+            match (parts.next(), parts.next()) {
+                (Some(l), Some(r)) => (l, r),
+                _ => continue,
+            }
+        } else {
             continue;
         };
 
@@ -278,9 +288,21 @@ fn load_byte_level_bpe(
         .unwrap_or_default();
 
     // Build merges with proper ID mapping
+    // Handle both string format ("Ġ Ġ") and array format (["Ġ", "Ġ"])
     let merges: Vec<(u32, u32)> = merges_arr
         .iter()
         .filter_map(|m| {
+            // Try array format first (Llama 4 style): ["left", "right"]
+            if let Some(arr) = m.as_array() {
+                if arr.len() >= 2 {
+                    let left_str = arr[0].as_str()?;
+                    let right_str = arr[1].as_str()?;
+                    let left = vocab_map.get(left_str)?.as_u64()? as u32;
+                    let right = vocab_map.get(right_str)?.as_u64()? as u32;
+                    return Some((left, right));
+                }
+            }
+            // Fall back to string format (GPT-2/Llama 3 style): "left right"
             let s = m.as_str()?;
             let mut parts = s.split(' ');
             let left = vocab_map.get(parts.next()?)?.as_u64()? as u32;
@@ -353,9 +375,21 @@ fn load_vocab_defined_bpe(
         .max(256);
 
     // Build merges with proper ID mapping
+    // Handle both string format ("Ġ Ġ") and array format (["Ġ", "Ġ"])
     let merges: Vec<(u32, u32)> = merges_arr
         .iter()
         .filter_map(|m| {
+            // Try array format first (Llama 4 style): ["left", "right"]
+            if let Some(arr) = m.as_array() {
+                if arr.len() >= 2 {
+                    let left_str = arr[0].as_str()?;
+                    let right_str = arr[1].as_str()?;
+                    let left = vocab_map.get(left_str)?.as_u64()? as u32;
+                    let right = vocab_map.get(right_str)?.as_u64()? as u32;
+                    return Some((left, right));
+                }
+            }
+            // Fall back to string format (GPT-2/Llama 3 style): "left right"
             let s = m.as_str()?;
             let mut parts = s.split(' ');
             let left = vocab_map.get(parts.next()?)?.as_u64()? as u32;

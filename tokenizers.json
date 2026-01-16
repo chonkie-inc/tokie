@@ -260,11 +260,11 @@
   {
     "provider": "Meta",
     "model": "Llama 4",
-    "vocab_size": 128000,
-    "encoder": "Backtracking",
+    "vocab_size": 200000,
+    "encoder": "Simple",
     "pretokenizer": "Cl100k",
     "normalizer": "None",
-    "supported": false,
+    "supported": true,
     "performance": null
   },
   {

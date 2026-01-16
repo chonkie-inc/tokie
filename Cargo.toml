@@ -61,16 +61,4 @@ name = "tiktoken_compat"
 required-features = ["hf"]
 
 [[example]]
-name = "verify_gpt2"
-required-features = ["hf"]
-
-[[example]]
-name = "verify_gpt2_vocab"
-required-features = ["hf"]
-
-[[example]]
-name = "check_embedding_models"
-required-features = ["hf"]
-
-[[example]]
 name = "verify_embedding_models"
