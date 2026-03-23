@@ -355,6 +355,117 @@ impl Tokenizer {
         self.decoder.token_to_bytes(token)
     }
 
+    /// Encode multiple texts in parallel.
+    ///
+    /// Distributes texts across threads for inter-text parallelism.
+    /// For texts >= 10KB, each text also benefits from intra-text parallelism
+    /// via `encode()`.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let texts = vec!["Hello, world!", "How are you?", "Goodbye!"];
+    /// let all_tokens = tokenizer.encode_batch(&texts, true);
+    /// assert_eq!(all_tokens.len(), 3);
+    /// ```
+    pub fn encode_batch(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+        let num_cpus = thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(1);
+
+        // Use distributed approach when there are enough texts to keep all cores busy.
+        // Otherwise, sequential loop lets each encode() use internal parallelism.
+        if texts.len() > num_cpus {
+            self.encode_batch_distributed(texts, add_special_tokens)
+        } else {
+            self.encode_batch_sequential(texts, add_special_tokens)
+        }
+    }
+
+    /// Approach A: distribute texts evenly across threads.
+    /// Each thread encodes its chunk of texts sequentially.
+    fn encode_batch_distributed(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+        if texts.is_empty() {
+            return Vec::new();
+        }
+
+        let num_cpus = thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(1);
+
+        if num_cpus == 1 || texts.len() == 1 {
+            return texts.iter().map(|t| self.encode(t, add_special_tokens)).collect();
+        }
+
+        let chunk_size = (texts.len() + num_cpus - 1) / num_cpus;
+
+        thread::scope(|s| {
+            let handles: Vec<_> = texts
+                .chunks(chunk_size)
+                .map(|text_chunk| {
+                    s.spawn(|| {
+                        text_chunk
+                            .iter()
+                            .map(|t| self.encode(t, add_special_tokens))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap())
+                .collect()
+        })
+    }
+
+    /// Approach B: sequential loop, each encode() may parallelize internally.
+    fn encode_batch_sequential(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+        texts.iter().map(|t| self.encode(t, add_special_tokens)).collect()
+    }
+
+    /// Count tokens for multiple texts in parallel.
+    ///
+    /// # Example
+    /// ```ignore
+    /// let texts = vec!["Hello, world!", "How are you?"];
+    /// let counts = tokenizer.count_tokens_batch(&texts);
+    /// assert_eq!(counts.len(), 2);
+    /// ```
+    pub fn count_tokens_batch(&self, texts: &[&str]) -> Vec<usize> {
+        if texts.is_empty() {
+            return Vec::new();
+        }
+
+        let num_cpus = thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(1);
+
+        if num_cpus == 1 || texts.len() == 1 {
+            return texts.iter().map(|t| self.count_tokens(t)).collect();
+        }
+
+        let chunk_size = (texts.len() + num_cpus - 1) / num_cpus;
+
+        thread::scope(|s| {
+            let handles: Vec<_> = texts
+                .chunks(chunk_size)
+                .map(|text_chunk| {
+                    s.spawn(|| {
+                        text_chunk
+                            .iter()
+                            .map(|t| self.count_tokens(t))
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+
+            handles
+                .into_iter()
+                .flat_map(|h| h.join().unwrap())
+                .collect()
+        })
+    }
+
     /// Count tokens without storing them.
     ///
     /// Uses the same parallelized encoding path as `encode()`.
@@ -573,5 +684,86 @@ mod tests {
         let tokens = tokenizer.encode_bytes(text);
         let decoded = tokenizer.decode_bytes(&tokens);
         assert_eq!(decoded, text);
+    }
+
+    #[test]
+    fn test_encode_batch_empty() {
+        let tokenizer = make_test_tokenizer();
+        let result = tokenizer.encode_batch(&[], false);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_encode_batch_single() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let single = tokenizer.encode("Hello world", false);
+        let batch = tokenizer.encode_batch(&["Hello world"], false);
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0], single);
+    }
+
+    #[test]
+    fn test_encode_batch_multiple() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let texts = vec!["Hello world", "abc def", "test"];
+        let batch = tokenizer.encode_batch(&texts, false);
+        assert_eq!(batch.len(), 3);
+        for (i, text) in texts.iter().enumerate() {
+            assert_eq!(batch[i], tokenizer.encode(text, false));
+        }
+    }
+
+    #[test]
+    fn test_encode_batch_preserves_order() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let texts: Vec<&str> = (0..20).map(|i| match i % 4 {
+            0 => "alpha",
+            1 => "beta gamma",
+            2 => "delta epsilon zeta",
+            _ => "x",
+        }).collect();
+        let batch = tokenizer.encode_batch(&texts, false);
+        assert_eq!(batch.len(), texts.len());
+        for (i, text) in texts.iter().enumerate() {
+            assert_eq!(batch[i], tokenizer.encode(text, false));
+        }
+    }
+
+    #[test]
+    fn test_encode_batch_with_special_tokens() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let texts = vec!["Hello", "world"];
+        let batch_with = tokenizer.encode_batch(&texts, true);
+        let batch_without = tokenizer.encode_batch(&texts, false);
+        // Results should differ if post-processor adds tokens
+        // With no post-processor (PostProcessor::None), they should be equal
+        assert_eq!(batch_with, batch_without);
+    }
+
+    #[test]
+    fn test_encode_batch_approaches_match() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let texts: Vec<&str> = vec!["Hello world", "abc def ghi", "test one two three", "x"];
+        let distributed = tokenizer.encode_batch_distributed(&texts, false);
+        let sequential = tokenizer.encode_batch_sequential(&texts, false);
+        assert_eq!(distributed, sequential);
+    }
+
+    #[test]
+    fn test_count_tokens_batch() {
+        let tokenizer = make_test_tokenizer_with_pretokenizer();
+        let texts = vec!["Hello world", "abc", "test one two"];
+        let counts = tokenizer.count_tokens_batch(&texts);
+        assert_eq!(counts.len(), 3);
+        for (i, text) in texts.iter().enumerate() {
+            assert_eq!(counts[i], tokenizer.count_tokens(text));
+        }
+    }
+
+    #[test]
+    fn test_count_tokens_batch_empty() {
+        let tokenizer = make_test_tokenizer();
+        let result = tokenizer.count_tokens_batch(&[]);
+        assert!(result.is_empty());
     }
 }

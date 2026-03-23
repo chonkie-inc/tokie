@@ -83,3 +83,49 @@ def test_gpt2():
     assert len(tokens) > 0
     decoded = t.decode(tokens)
     assert decoded == "Hello, world!"
+
+
+def test_encode_batch_basic():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    texts = ["Hello world", "How are you?", "This is a test", "Goodbye", "One more"]
+    batch = t.encode_batch(texts)
+    assert len(batch) == 5
+    for i, text in enumerate(texts):
+        assert batch[i] == t.encode(text)
+
+
+def test_encode_batch_empty():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    assert t.encode_batch([]) == []
+
+
+def test_encode_batch_preserves_order():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    texts = [f"sentence number {i} with some content" for i in range(50)]
+    batch = t.encode_batch(texts)
+    assert len(batch) == 50
+    for i, text in enumerate(texts):
+        assert batch[i] == t.encode(text), f"Mismatch at index {i}"
+
+
+def test_encode_batch_without_special_tokens():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    texts = ["hello", "world"]
+    with_special = t.encode_batch(texts, add_special_tokens=True)
+    without_special = t.encode_batch(texts, add_special_tokens=False)
+    for ws, wos in zip(with_special, without_special):
+        assert len(ws) == len(wos) + 2  # [CLS] + tokens + [SEP]
+
+
+def test_count_tokens_batch():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    texts = ["Hello world", "How are you?", "Test"]
+    counts = t.count_tokens_batch(texts)
+    assert len(counts) == 3
+    for i, text in enumerate(texts):
+        assert counts[i] == t.count_tokens(text)
+
+
+def test_count_tokens_batch_empty():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    assert t.count_tokens_batch([]) == []

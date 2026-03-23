@@ -27,6 +27,9 @@ class Tokenizer:
     def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
         """Encode text into token IDs."""
         ...
+    def encode_batch(self, texts: list[str], add_special_tokens: bool = True) -> list[list[int]]:
+        """Encode multiple texts in parallel."""
+        ...
     def encode_pair(
         self, text_a: str, text_b: str, add_special_tokens: bool = True
     ) -> EncodingPair:
@@ -43,6 +46,9 @@ class Tokenizer:
         ...
     def count_tokens(self, text: str) -> int:
         """Count the number of tokens in the text."""
+        ...
+    def count_tokens_batch(self, texts: list[str]) -> list[int]:
+        """Count tokens for multiple texts in parallel."""
         ...
     def save(self, path: str) -> None:
         """Save the tokenizer to a .tkz binary file."""

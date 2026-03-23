@@ -120,11 +120,28 @@ impl PyTokenizer {
         PyBytes::new(py, &bytes)
     }
 
+    /// Encode multiple texts in parallel.
+    #[pyo3(signature = (texts, add_special_tokens=true))]
+    fn encode_batch(&self, py: Python<'_>, texts: Vec<String>, add_special_tokens: bool) -> Vec<Vec<u32>> {
+        py.allow_threads(|| {
+            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+            self.inner.encode_batch(&text_refs, add_special_tokens)
+        })
+    }
+
     /// Count the number of tokens in the text.
     fn count_tokens(&self, py: Python<'_>, text: &str) -> usize {
         let text = text.to_string();
         let inner = &self.inner;
         py.allow_threads(|| inner.count_tokens(&text))
+    }
+
+    /// Count tokens for multiple texts in parallel.
+    fn count_tokens_batch(&self, py: Python<'_>, texts: Vec<String>) -> Vec<usize> {
+        py.allow_threads(|| {
+            let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+            self.inner.count_tokens_batch(&text_refs)
+        })
     }
 
     /// Save the tokenizer to a .tkz binary file.
