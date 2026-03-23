@@ -2,6 +2,6 @@
 
 ![tokie](assets/tokie.png)
 
-*A fast, correct tokenizer for Rust and Python*
+*50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
 
 </div>
