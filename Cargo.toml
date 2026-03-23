@@ -13,10 +13,7 @@ hf = ["hf-hub"]
 [dependencies]
 crc32fast = "1.4"
 daggrs = "0.1.1"
-fnv = "1.0"
-boomphf = "0.6"
 foldhash = "0.1"
-rustc-hash = "2.1"
 smallvec = "1.13"
 hf-hub = { version = "0.4.3", default-features = false, features = ["ureq"], optional = true }
 memchr = "2.7"
