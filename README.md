@@ -96,6 +96,12 @@ For tiktoken-style BPE models (GPT-2, cl100k, o200k, Llama 3), tokie uses a back
 
 ![BPE encoding speed](assets/benchmark.png)
 
+### WordPiece (BERT, MiniLM, BGE, GTE)
+
+WordPiece tokenizers use a different algorithm — greedy longest-match prefix search over a vocabulary trie. tokie uses a pre-built Double-Array trie for O(n) lookup with excellent cache locality, combined with a custom BERT pretokenizer that avoids regex entirely. The result is **82x faster** than HuggingFace tokenizers on BERT, with identical output (737,710 tokens match exactly).
+
+![WordPiece encoding speed](assets/benchmark_wordpiece.png)
+
 ### SentencePiece BPE (T5, XLM-R, Gemma)
 
 SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property. Text is chunked at metaspace boundaries using SIMD-accelerated splitting, then encoded in parallel. This gives **7.7x** faster throughput than HuggingFace tokenizers.
