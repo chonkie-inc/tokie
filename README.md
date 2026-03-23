@@ -2,11 +2,13 @@
 
 ![tokie](assets/tokie.png)
 
-*50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
+# tokie
 
 [![Crates.io](https://img.shields.io/crates/v/tokie)](https://crates.io/crates/tokie)
 [![PyPI](https://img.shields.io/pypi/v/tokie)](https://pypi.org/project/tokie/)
 [![License](https://img.shields.io/crates/l/tokie)](LICENSE-MIT)
+
+*50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
 
 [Install](#install) •
 [Quick Start](#quick-start) •
