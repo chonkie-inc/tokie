@@ -24,16 +24,6 @@ And then there's the fun part: tokenization is embarrassingly parallel if you ch
 
 The result is **tokie** — one tokenizer to rule them all.
 
-## Features
-
-- **50x faster** than HuggingFace tokenizers on common workloads
-- **10x smaller** model files with the `.tkz` binary format (~5ms load time)
-- **100% accurate** — identical output to HuggingFace, token for token
-- **One format** — loads tiktoken, HuggingFace tokenizer.json, and .tkz files
-- **Every algorithm** — BPE (backtracking, simple, SentencePiece), WordPiece, Unigram
-- **Custom parsers** — no regex engine, just purpose-built tokenization parsers
-- **Rust + Python** — native Rust library with PyO3 bindings
-
 ## Install
 
 ### Python
