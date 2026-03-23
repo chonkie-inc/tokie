@@ -90,14 +90,3 @@ tokenizer = tokie.Tokenizer.from_file("model.tkz")
 ```
 
 `from_pretrained()` automatically tries `.tkz` first, falling back to `tokenizer.json`.
-
-## Pair Encoding
-
-For cross-encoder and reranker models:
-
-```python
-pair = tokenizer.encode_pair("How are you?", "I am fine.")
-pair.ids             # [101, 2129, 2024, ..., 102]
-pair.attention_mask  # [1, 1, 1, ..., 1]
-pair.type_ids        # [0, 0, 0, ..., 1, 1, 1]
-```
