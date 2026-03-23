@@ -34,13 +34,24 @@ The result is **tokie** — one tokenizer to rule them all.
 - **Custom parsers** — no regex engine, just purpose-built tokenization parsers
 - **Rust + Python** — native Rust library with PyO3 bindings
 
-## Quick Start
+## Install
 
 ### Python
 
 ```bash
 pip install tokie
 ```
+
+### Rust
+
+```toml
+[dependencies]
+tokie = { version = "0.0.3", features = ["hf"] }
+```
+
+## Quick Start
+
+### Python
 
 ```python
 import tokie
@@ -52,11 +63,6 @@ print(tokenizer.vocab_size)  # 30522
 ```
 
 ### Rust
-
-```toml
-[dependencies]
-tokie = { version = "0.0.3", features = ["hf"] }
-```
 
 ```rust
 use tokie::Tokenizer;
