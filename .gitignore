@@ -30,8 +30,9 @@ models/
 .DS_Store
 
 # Benchmark data (download instructions in benches/tokenize.rs)
-benches/data/
+**/benches/data/
 
 # Development files
 CLAUDE.md
 work.log
+__pycache__

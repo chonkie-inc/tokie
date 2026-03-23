@@ -1,0 +1,15 @@
+[package]
+name = "tokie-python"
+version = "0.0.2"
+edition = "2024"
+description = "Python bindings for tokie — blazingly fast tokenizer"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+name = "tokie"
+crate-type = ["cdylib"]
+
+[dependencies]
+tokie-core = { package = "tokie", path = "../tokie", features = ["hf"] }
+pyo3 = { version = "0.24", features = ["extension-module"] }
