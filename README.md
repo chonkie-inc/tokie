@@ -101,7 +101,3 @@ pair.ids             # [101, 2129, 2024, ..., 102]
 pair.attention_mask  # [1, 1, 1, ..., 1]
 pair.type_ids        # [0, 0, 0, ..., 1, 1, 1]
 ```
-
-## License
-
-MIT OR Apache-2.0 — built by [Chonkie, Inc.](https://github.com/chonkie-inc)
