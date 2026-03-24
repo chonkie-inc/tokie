@@ -6,8 +6,10 @@
 
 [![Crates.io](https://img.shields.io/crates/v/tokie)](https://crates.io/crates/tokie)
 [![PyPI](https://img.shields.io/pypi/v/tokie)](https://pypi.org/project/tokie/)
-[![Downloads](https://img.shields.io/crates/d/tokie)](https://crates.io/crates/tokie)
+[![Crates.io Downloads](https://img.shields.io/crates/d/tokie)](https://crates.io/crates/tokie)
+[![PyPI Downloads](https://img.shields.io/pypi/dm/tokie)](https://pypi.org/project/tokie/)
 [![License](https://img.shields.io/crates/l/tokie)](LICENSE-MIT)
+[![docs.rs](https://img.shields.io/docsrs/tokie)](https://docs.rs/tokie)
 [![GitHub Stars](https://img.shields.io/github/stars/chonkie-inc/tokie)](https://github.com/chonkie-inc/tokie)
 
 *50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*

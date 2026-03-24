@@ -68,6 +68,15 @@ print(pair.attention_mask)  # [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 print(pair.type_ids)        # [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
 ```
 
+## Byte Offsets
+
+```python
+# Get byte offsets for each token in the (normalized) input
+enc = tokenizer.encode_with_offsets("Hello world")
+for token_id, (start, end) in zip(enc.ids, enc.offsets):
+    print(f"  token {token_id}: bytes [{start}:{end}]")
+```
+
 ## Save & Load (.tkz format)
 
 tokie's binary `.tkz` format is ~10x smaller than `tokenizer.json` and loads in ~5ms:

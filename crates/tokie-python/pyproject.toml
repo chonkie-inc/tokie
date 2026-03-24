@@ -9,12 +9,40 @@ description = "Blazingly fast tokenizer — 50x faster, 10x smaller, 100% accura
 readme = "README_PYPI.md"
 requires-python = ">=3.11"
 license = { text = "MIT OR Apache-2.0" }
+keywords = [
+    "tokenizer",
+    "tokenization",
+    "bpe",
+    "wordpiece",
+    "sentencepiece",
+    "bert",
+    "gpt2",
+    "llama",
+    "nlp",
+    "embedding",
+    "rag",
+    "transformers",
+    "huggingface",
+    "fast",
+    "rust",
+]
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Text Processing",
+    "Topic :: Text Processing :: Linguistic",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 4 - Beta",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 
 [project.urls]
