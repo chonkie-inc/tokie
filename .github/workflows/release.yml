@@ -26,14 +26,19 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            manylinux: auto
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
+            manylinux: 2_28
           - os: macos-latest
             target: x86_64-apple-darwin
+            manylinux: auto
           - os: macos-latest
             target: aarch64-apple-darwin
+            manylinux: auto
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            manylinux: auto
     steps:
       - uses: actions/checkout@v4
 
@@ -41,7 +46,7 @@ jobs:
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --interpreter 3.11 3.12 3.13
-          manylinux: auto
+          manylinux: ${{ matrix.manylinux }}
           working-directory: crates/tokie-python
 
       - uses: actions/upload-artifact@v4
