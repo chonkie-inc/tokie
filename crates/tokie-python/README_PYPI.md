@@ -12,7 +12,7 @@
 
 ---
 
-**tokie** is a fast, correct tokenizer library built in Rust with Python bindings. It supports BPE (GPT-2, tiktoken, SentencePiece), WordPiece (BERT), and Unigram encoders.
+**tokie** is a fast, correct tokenizer library built in Rust with Python bindings. Drop-in replacement for HuggingFace tokenizers — supports BPE (GPT-2, tiktoken, SentencePiece), WordPiece (BERT), and Unigram encoders.
 
 ## Installation
 
@@ -28,18 +28,35 @@ import tokie
 # Load from HuggingFace Hub (tries .tkz first, falls back to tokenizer.json)
 tokenizer = tokie.Tokenizer.from_pretrained("bert-base-uncased")
 
-# Encode
-tokens = tokenizer.encode("Hello, world!")
-print(tokens)  # [101, 7592, 1010, 2088, 999, 102]
+# Encode — returns Encoding with ids, attention_mask, type_ids
+encoding = tokenizer.encode("Hello, world!")
+print(encoding.ids)             # [101, 7592, 1010, 2088, 999, 102]
+print(encoding.attention_mask)  # [1, 1, 1, 1, 1, 1]
 
 # Decode
-text = tokenizer.decode(tokens)
+text = tokenizer.decode([101, 7592, 1010, 2088, 999, 102])
 
-# Token count
+# Token count (fast, no Encoding overhead)
 count = tokenizer.count_tokens("Hello, world!")
 
 # Vocabulary size
 print(tokenizer.vocab_size)  # 30522
+```
+
+## Padding & Truncation
+
+```python
+# Truncate to max length (special tokens preserved)
+tokenizer.enable_truncation(max_length=32)
+
+# Pad all sequences in a batch to the same length
+tokenizer.enable_padding(length=32, pad_id=tokenizer.pad_token_id or 0)
+
+# Batch encode — all sequences same length, ready for model input
+texts = ["Hello world", "Short", "A much longer sentence for testing"]
+batch = tokenizer.encode_batch(texts, add_special_tokens=True)
+for enc in batch:
+    print(len(enc), enc.ids[:5])  # All length 32
 ```
 
 ## Pair Encoding (Cross-Encoders)
