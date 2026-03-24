@@ -51,9 +51,10 @@ import tokie
 # Load any HuggingFace tokenizer
 tokenizer = tokie.Tokenizer.from_pretrained("bert-base-uncased")
 
-# Encode — returns Encoding with ids, attention_mask, type_ids
-encoding = tokenizer.encode("Hello, world!")
+# Encode — returns Encoding with ids, attention_mask, type_ids, tokens
+encoding = tokenizer("Hello, world!")  # or tokenizer.encode("Hello, world!")
 print(encoding.ids)             # [101, 7592, 1010, 2088, 999, 102]
+print(encoding.tokens)          # ['[CLS]', 'hello', ',', 'world', '!', '[SEP]']
 print(encoding.attention_mask)  # [1, 1, 1, 1, 1, 1]
 
 # Decode
@@ -107,10 +108,11 @@ print(results[0].attention_mask)  # [1, 1, 1, 1, 0, 0, 0, ...]
 For rerankers and cross-encoders that need sentence pairs with token type IDs:
 
 ```python
-pair = tokenizer.encode_pair("How are you?", "I am fine.")
-pair.ids             # [101, 2129, 2024, 2017, 1029, 102, 1045, 2572, 2986, 1012, 102]
-pair.attention_mask  # [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-pair.type_ids        # [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
+pair = tokenizer("How are you?", "I am fine.")  # or tokenizer.encode_pair(...)
+pair.ids               # [101, 2129, 2024, 2017, 1029, 102, 1045, 2572, 2986, 1012, 102]
+pair.attention_mask    # [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+pair.type_ids          # [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
+pair.special_tokens_mask  # [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 ```
 
 ### Byte Offsets
