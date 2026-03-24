@@ -6,7 +6,9 @@
 
 [![Crates.io](https://img.shields.io/crates/v/tokie)](https://crates.io/crates/tokie)
 [![PyPI](https://img.shields.io/pypi/v/tokie)](https://pypi.org/project/tokie/)
+[![Downloads](https://img.shields.io/crates/d/tokie)](https://crates.io/crates/tokie)
 [![License](https://img.shields.io/crates/l/tokie)](LICENSE-MIT)
+[![GitHub Stars](https://img.shields.io/github/stars/chonkie-inc/tokie)](https://github.com/chonkie-inc/tokie)
 
 *50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
 
@@ -27,8 +29,6 @@
 ### Python
 
 ```bash
-uv pip install tokie
-# or
 pip install tokie
 ```
 
@@ -36,7 +36,7 @@ pip install tokie
 
 ```toml
 [dependencies]
-tokie = { version = "0.0.3", features = ["hf"] }
+tokie = { version = "0.0.4", features = ["hf"] }
 ```
 
 ## Quick Start
@@ -49,15 +49,19 @@ import tokie
 # Load any HuggingFace tokenizer
 tokenizer = tokie.Tokenizer.from_pretrained("bert-base-uncased")
 
-# Encode and decode
-tokens = tokenizer.encode("Hello, world!")
-text = tokenizer.decode(tokens)
+# Encode — returns Encoding with ids, attention_mask, type_ids
+encoding = tokenizer.encode("Hello, world!")
+print(encoding.ids)             # [101, 7592, 1010, 2088, 999, 102]
+print(encoding.attention_mask)  # [1, 1, 1, 1, 1, 1]
+
+# Decode
+text = tokenizer.decode(encoding.ids)  # "hello , world !"
 
 # Count tokens without allocating
-count = tokenizer.count_tokens("Hello, world!")
+count = tokenizer.count_tokens("Hello, world!")  # 6
 
-# Vocabulary size
-print(tokenizer.vocab_size)  # 30522
+# Batch encode (parallel across all cores)
+encodings = tokenizer.encode_batch(["Hello!", "World"], add_special_tokens=True)
 ```
 
 ### Rust
@@ -66,11 +70,35 @@ print(tokenizer.vocab_size)  # 30522
 use tokie::Tokenizer;
 
 let tokenizer = Tokenizer::from_pretrained("bert-base-uncased")?;
-let tokens = tokenizer.encode("Hello, world!", true);
-let text = tokenizer.decode(&tokens).unwrap();
+let encoding = tokenizer.encode("Hello, world!", true);
+println!("{:?}", encoding.ids);             // [101, 7592, 1010, 2088, 999, 102]
+println!("{:?}", encoding.attention_mask);  // [1, 1, 1, 1, 1, 1]
+
+let text = tokenizer.decode(&encoding.ids).unwrap();
 ```
 
 ## Examples
+
+### Padding & Truncation
+
+For ML inference, you need fixed-length inputs. tokie supports padding and truncation just like HuggingFace:
+
+```python
+tokenizer = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+
+# Truncate to max length
+tokenizer.enable_truncation(max_length=128)
+
+# Pad to fixed length (or use BatchLongest for dynamic padding)
+tokenizer.enable_padding(length=128, pad_id=0)
+
+# All outputs are now exactly 128 tokens
+results = tokenizer.encode_batch(["Short text", "A much longer piece of text for testing"])
+assert all(len(r) == 128 for r in results)
+
+# attention_mask shows which tokens are real (1) vs padding (0)
+print(results[0].attention_mask)  # [1, 1, 1, 1, 0, 0, 0, ...]
+```
 
 ### Cross-Encoder Pair Encoding
 
@@ -81,6 +109,15 @@ pair = tokenizer.encode_pair("How are you?", "I am fine.")
 pair.ids             # [101, 2129, 2024, 2017, 1029, 102, 1045, 2572, 2986, 1012, 102]
 pair.attention_mask  # [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 pair.type_ids        # [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
+```
+
+### Vocabulary Access
+
+```python
+tokenizer.vocab_size          # 30522
+tokenizer.id_to_token(101)    # "[CLS]"
+tokenizer.token_to_id("[SEP]")  # 102
+vocab = tokenizer.get_vocab()   # {"[CLS]": 101, "[SEP]": 102, ...}
 ```
 
 ### Save and Load `.tkz` Files
@@ -130,7 +167,7 @@ tokie uses hand-written parsers for each pretokenization pattern — GPT-2, cl10
 
 The second problem was that no single library could load everything. I actually tried to solve this before with [AutoTikTokenizer](https://github.com/bhavnick/autotiktokenizer), believing tiktoken's BPE engine could handle all of HuggingFace. I was wrong — you need fundamentally different algorithms for each encoder type: backtracking BPE for tiktoken-style models, heap-based BPE for models with non-topological merge orders, radix-heap BPE for SentencePiece, plus WordPiece and Unigram each with their own tricks.
 
-The third insight was parallelism. Tokenization is embarrassingly parallel if you split text at the right boundaries. We use [memchunk](https://github.com/chonkie-inc/chunk) to SIMD-split text into chunks that respect token boundaries, then encode each chunk on a separate core and concatenate. This gives near-linear scaling — about 5x on 8 cores.
+The third insight was parallelism. Tokenization is embarrassingly parallel if you split text at the right boundaries. We use [chunk](https://github.com/chonkie-inc/chunk) to SIMD-split text into chunks that respect token boundaries, then encode each chunk on a separate core and concatenate. This gives near-linear scaling — about 5x on 8 cores.
 
 Finally, we built the `.tkz` format to eliminate load-time overhead. A `tokenizer.json` file has to be parsed, validated, and used to reconstruct all the internal data structures (including the Aho-Corasick automaton, which is expensive to build for large vocabularies). The `.tkz` format stores the pre-built DAAC automaton, vocabulary, and configuration as a flat binary — loading is just deserialization, no construction required. This cuts load times from 150ms to 15ms for large models like O200K.
 
@@ -138,12 +175,7 @@ The result is **tokie** — one tokenizer to rule them all.
 
 ## Acknowledgements
 
-tokie builds on ideas and techniques from several excellent projects:
-
-- [HuggingFace tokenizers](https://github.com/huggingface/tokenizers) — the gold standard for tokenizer correctness
-- [tiktoken](https://github.com/openai/tiktoken) — OpenAI's fast BPE implementation
-- [GitHub's rust-gems](https://github.com/github/rust-gems) — the backtracking BPE approach using Aho-Corasick automata
-- [memchunk](https://github.com/chonkie-inc/chunk) — SIMD-accelerated text chunking for parallel tokenization
+tokie builds on ideas from [HuggingFace tokenizers](https://github.com/huggingface/tokenizers), [tiktoken](https://github.com/openai/tiktoken), [GitHub's rust-gems](https://github.com/github/rust-gems) (backtracking BPE via Aho-Corasick), and [chunk](https://github.com/chonkie-inc/chunk) (SIMD text splitting).
 
 ## Citation
 
