@@ -294,6 +294,12 @@ impl PyTokenizer {
         self.write().no_truncation();
     }
 
+    /// Number of special tokens added for a single sequence or pair.
+    #[pyo3(signature = (is_pair=false))]
+    fn num_special_tokens_to_add(&self, is_pair: bool) -> usize {
+        self.read().num_special_tokens_to_add(is_pair)
+    }
+
     fn __repr__(&self) -> String {
         format!("Tokenizer(vocab_size={})", self.read().vocab_size())
     }

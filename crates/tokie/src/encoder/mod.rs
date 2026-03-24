@@ -11,14 +11,12 @@
 
 mod backtracking;
 mod sentencepiece;
-mod sentencepiecev2;
 mod simple;
 mod unigram;
 mod wordpiece;
 
 pub use backtracking::{BacktrackingBytePairEncoder, EncodeIter};
 pub use sentencepiece::{EncodeState, SentencePieceBPE};
-pub use sentencepiecev2::SentencePieceBPEv2;
 pub use simple::BytePairEncoder;
 pub use unigram::UnigramEncoder;
 pub use wordpiece::WordPieceEncoder;

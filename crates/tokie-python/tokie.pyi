@@ -108,6 +108,9 @@ class Tokenizer:
     def pad_token_id(self) -> Optional[int]:
         """The pad token ID, if set."""
         ...
+    def num_special_tokens_to_add(self, is_pair: bool = False) -> int:
+        """Number of special tokens added for a single sequence or pair."""
+        ...
     def __repr__(self) -> str: ...
 
 class TokieError(Exception):

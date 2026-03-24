@@ -256,3 +256,25 @@ def test_encode_with_offsets_has_attention_mask():
     enc = t.encode_with_offsets("test", add_special_tokens=False)
     assert all(m == 1 for m in enc.attention_mask)
     assert len(enc.attention_mask) == len(enc.ids)
+
+
+def test_num_special_tokens_to_add():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    assert t.num_special_tokens_to_add(False) == 2  # [CLS] + [SEP]
+    assert t.num_special_tokens_to_add(True) == 3  # [CLS] + [SEP] + [SEP]
+
+
+def test_unigram_t5():
+    t = tokie.Tokenizer.from_pretrained("google-t5/t5-small")
+    enc = t.encode("Hello world", add_special_tokens=False)
+    assert len(enc.ids) > 0
+    decoded = t.decode(enc.ids)
+    assert decoded == "Hello world"
+
+
+def test_unigram_xlmr():
+    t = tokie.Tokenizer.from_pretrained("FacebookAI/xlm-roberta-base")
+    enc = t.encode("Hello world", add_special_tokens=False)
+    assert len(enc.ids) > 0
+    decoded = t.decode(enc.ids)
+    assert "Hello world" in decoded

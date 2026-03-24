@@ -95,6 +95,15 @@ impl Tokenizer {
     pub fn padding(&self) -> Option<&PaddingParams> { self.padding.as_ref() }
     pub fn truncation(&self) -> Option<&TruncationParams> { self.truncation.as_ref() }
 
+    /// Number of special tokens added for a single sequence.
+    pub fn num_special_tokens_to_add(&self, is_pair: bool) -> usize {
+        if is_pair {
+            self.post_processor.num_special_tokens_pair()
+        } else {
+            self.post_processor.num_special_tokens_single()
+        }
+    }
+
     /// Minimum text size (in bytes) to trigger chunked parallel encoding.
     const PARALLEL_CHUNK_THRESHOLD: usize = 10_000;
 
