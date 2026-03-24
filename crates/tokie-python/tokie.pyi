@@ -27,6 +27,14 @@ class Tokenizer:
     def from_pretrained(repo_id: str) -> "Tokenizer":
         """Download and load a tokenizer from the HuggingFace Hub."""
         ...
+    def __call__(
+        self,
+        text: str,
+        text_pair: Optional[str] = None,
+        add_special_tokens: bool = True,
+    ) -> Encoding:
+        """Encode text or a text pair. Usage: tokenizer("text") or tokenizer("text_a", "text_b")."""
+        ...
     def encode(self, text: str, add_special_tokens: bool = True) -> Encoding:
         """Encode text into an Encoding (ids, attention_mask, type_ids)."""
         ...

@@ -125,6 +125,33 @@ impl PyTokenizer {
         Ok(Self { inner: RwLock::new(inner) })
     }
 
+    /// Call the tokenizer: encode text or a text pair.
+    /// Usage: tokenizer("text") or tokenizer("text_a", "text_b")
+    #[pyo3(signature = (text, text_pair=None, add_special_tokens=true))]
+    fn __call__(
+        &self,
+        py: Python<'_>,
+        text: &str,
+        text_pair: Option<&str>,
+        add_special_tokens: bool,
+    ) -> PyEncoding {
+        match text_pair {
+            Some(pair) => {
+                let a = text.to_string();
+                let b = pair.to_string();
+                let inner = self.read();
+                let enc = py.allow_threads(|| inner.encode_pair(&a, &b, add_special_tokens));
+                PyEncoding::from_encoding(enc, &*inner)
+            }
+            None => {
+                let text = text.to_string();
+                let inner = self.read();
+                let enc = py.allow_threads(|| inner.encode(&text, add_special_tokens));
+                PyEncoding::from_encoding(enc, &*inner)
+            }
+        }
+    }
+
     /// Encode text into an Encoding (ids, attention_mask, type_ids).
     #[pyo3(signature = (text, add_special_tokens=true))]
     fn encode(&self, py: Python<'_>, text: &str, add_special_tokens: bool) -> PyEncoding {

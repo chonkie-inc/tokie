@@ -315,6 +315,25 @@ def test_tokens_encode_batch():
         assert enc.tokens[0] == "[CLS]"
 
 
+def test_call_single():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    enc = t("Hello world")
+    assert enc.ids == t.encode("Hello world").ids
+
+
+def test_call_pair():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    enc = t("Hello", "World")
+    assert enc.ids == t.encode_pair("Hello", "World").ids
+    assert 1 in enc.type_ids  # second sequence has type_id 1
+
+
+def test_call_no_special():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    enc = t("hello", add_special_tokens=False)
+    assert enc.ids == t.encode("hello", add_special_tokens=False).ids
+
+
 def test_unigram_t5():
     t = tokie.Tokenizer.from_pretrained("google-t5/t5-small")
     enc = t.encode("Hello world", add_special_tokens=False)
