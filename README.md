@@ -12,7 +12,7 @@
 [![docs.rs](https://img.shields.io/docsrs/tokie)](https://docs.rs/tokie)
 [![GitHub Stars](https://img.shields.io/github/stars/chonkie-inc/tokie)](https://github.com/chonkie-inc/tokie)
 
-*50x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
+*10-136x faster tokenization, 10x smaller models, 100% accurate drop-in for HuggingFace*
 
 [Install](#install) •
 [Quick Start](#quick-start) •
@@ -113,6 +113,16 @@ pair.attention_mask  # [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 pair.type_ids        # [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]
 ```
 
+### Byte Offsets
+
+Track where each token maps back to in the original text:
+
+```python
+enc = tokenizer.encode_with_offsets("Hello world")
+for token_id, (start, end) in zip(enc.ids, enc.offsets):
+    print(f"  token {token_id}: bytes [{start}:{end}]")
+```
+
 ### Vocabulary Access
 
 ```python
@@ -154,6 +164,23 @@ WordPiece tokenizers use a different algorithm — greedy longest-match prefix s
 SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property. Text is chunked at metaspace boundaries using SIMD-accelerated splitting, then encoded in parallel. This gives **7.7x** faster throughput than HuggingFace tokenizers.
 
 ![SentencePiece BPE speed](assets/benchmark_sentencepiece.png)
+
+### Python Benchmarks (tokie vs HuggingFace tokenizers)
+
+Run `python scripts/benchmark_vs_hf.py` to reproduce. All results on Apple M3 Pro, median of 10 runs.
+
+| Model | Text Size | tokie | HF tokenizers | Speedup |
+|-------|-----------|-------|---------------|---------|
+| BERT | 45 KB | 0.15 ms | 9.15 ms | **61x** |
+| BERT | 900 KB | 1.69 ms | 229 ms | **136x** |
+| GPT-2 | 45 KB | 0.14 ms | 7.20 ms | **50x** |
+| GPT-2 | 900 KB | 1.70 ms | 181 ms | **107x** |
+| Llama 3 | 45 KB | 0.14 ms | 7.33 ms | **54x** |
+| Llama 3 | 900 KB | 2.04 ms | 190 ms | **93x** |
+| Qwen 3 | 45 KB | 0.15 ms | 8.18 ms | **54x** |
+| Gemma 3 | 45 KB | 1.01 ms | 9.62 ms | **10x** |
+
+100% token-accurate across all models. Batch encoding is 17-22x faster. Decoding is 7-32x faster.
 
 ### Tokenizer Loading
 
