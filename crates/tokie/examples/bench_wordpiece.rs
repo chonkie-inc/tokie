@@ -34,7 +34,7 @@ fn main() {
     let mut tokie_count = 0;
     for _ in 0..ITERATIONS {
         let tokens = tokie_tok.encode(&text, false);
-        tokie_count = tokens.len();
+        tokie_count = tokens.ids.len();
     }
     let tokie_elapsed = start.elapsed() / ITERATIONS as u32;
     let tokie_tp = mb / tokie_elapsed.as_secs_f64();

@@ -71,7 +71,7 @@ fn test_and_create(
     let hf_result = hf.encode(test_text, false).map_err(|e| e.to_string())?;
     let hf_tokens: Vec<u32> = hf_result.get_ids().to_vec();
 
-    let tokie_tokens = tokie.encode(test_text, false);
+    let tokie_tokens = tokie.encode(test_text, false).ids;
 
     let matches = hf_tokens == tokie_tokens;
 
@@ -97,7 +97,7 @@ fn test_and_create(
 
         // Benchmark tokie
         let start = Instant::now();
-        let tokie_wap = tokie.encode(&war_and_peace, false);
+        let tokie_wap = tokie.encode(&war_and_peace, false).ids;
         let tokie_time = start.elapsed();
         let tokie_throughput = bytes as f64 / tokie_time.as_secs_f64() / 1_000_000.0;
 

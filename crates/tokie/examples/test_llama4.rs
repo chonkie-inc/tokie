@@ -36,11 +36,12 @@ fn main() {
     let mut total = 0;
 
     for text in &test_cases {
-        let tokie_tokens = tokie.encode(text, false);
+        let tokie_encoding = tokie.encode(text, false);
+        let tokie_tokens = &tokie_encoding.ids;
         let hf_encoding = hf.encode(*text, false).expect("HF encode failed");
         let hf_tokens: Vec<u32> = hf_encoding.get_ids().to_vec();
 
-        let is_match = tokie_tokens == hf_tokens;
+        let is_match = *tokie_tokens == hf_tokens;
         if is_match {
             matches += 1;
         }

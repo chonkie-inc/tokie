@@ -20,11 +20,11 @@ fn test_tokenizer(name: &str, path: &str, verbose: bool) {
     match result {
         Ok(t) => {
             let test = "Hello, world! This is a test.";
-            let tokens = t.encode(test, false);
-            let decoded = t.decode(&tokens).unwrap_or_else(|| "[decode failed]".to_string());
+            let encoding = t.encode(test, false);
+            let decoded = t.decode(&encoding.ids).unwrap_or_else(|| "[decode failed]".to_string());
             let roundtrip = if decoded == test { "✓" } else { "≈" };
             println!("{:<25} OK  vocab={:<6} tokens={:<3} pretok={:?} encoder={:?} {}",
-                     name, t.vocab_size(), tokens.len(), t.pretokenizer_type(), t.encoder_type(), roundtrip);
+                     name, t.vocab_size(), encoding.ids.len(), t.pretokenizer_type(), t.encoder_type(), roundtrip);
             if verbose && roundtrip == "≈" {
                 println!("                          in:  {:?}", test);
                 println!("                          out: {:?}", decoded);

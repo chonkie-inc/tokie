@@ -42,7 +42,7 @@ fn main() {
         println!("\n=== Test: {:?} ===", text);
 
         let hf_enc = hf_tok.encode(text, false).unwrap();
-        let tokie_tokens = tokie.encode(text, false);
+        let tokie_tokens = tokie.encode(text, false).ids;
 
         println!("HF tokens:    {:?}", hf_enc.get_ids());
         println!("tokie tokens: {:?}", tokie_tokens);

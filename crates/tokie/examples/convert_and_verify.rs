@@ -98,7 +98,7 @@ fn main() {
         // Verify
         let mut mismatches = 0;
         for text in &test_texts {
-            let tokie_ids = tokie.encode(text, false);
+            let tokie_ids = tokie.encode(text, false).ids;
             let hf_encoding = hf.encode(text.to_string(), false).unwrap();
             let hf_ids: Vec<u32> = hf_encoding.get_ids().to_vec();
 

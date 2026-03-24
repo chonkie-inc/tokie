@@ -30,8 +30,7 @@ fn main() {
             let start = Instant::now();
             let mut total_tokens = 0;
             for _ in 0..iterations {
-                let tokens = tokenizer.encode(sample, false);
-                total_tokens = tokens.len();
+                total_tokens = tokenizer.encode(sample, false).ids.len();
             }
             let elapsed = start.elapsed();
 
@@ -109,8 +108,7 @@ fn main() {
         let start = Instant::now();
         let mut total_tokens = 0;
         for _ in 0..iterations {
-            let tokens = tokenizer.encode(text, false);
-            total_tokens = tokens.len();
+            total_tokens = tokenizer.encode(text, false).ids.len();
         }
         let elapsed = start.elapsed();
 

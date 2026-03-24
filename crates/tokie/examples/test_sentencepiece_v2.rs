@@ -101,12 +101,12 @@ fn main() {
     let _ = tokenizer.encode(&full_text, false);
 
     let start = Instant::now();
-    let tokens = tokenizer.encode(&full_text, false);
+    let encoding = tokenizer.encode(&full_text, false);
     let full_time = start.elapsed();
     let full_throughput = full_text.len() as f64 / full_time.as_secs_f64() / 1_000_000.0;
 
     println!("Full tokenizer:                {:>8.2} MB/s ({:>6.2}ms, {} tokens)",
-             full_throughput, full_time.as_millis(), tokens.len());
+             full_throughput, full_time.as_millis(), encoding.ids.len());
 
     println!("\n=== Done ===");
 }

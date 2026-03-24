@@ -1,7 +1,7 @@
 from typing import Optional
 
-class EncodingPair:
-    """Result of encoding a pair of texts (e.g. for cross-encoder models)."""
+class Encoding:
+    """Result of encoding text, with token IDs, attention mask, and type IDs."""
 
     ids: list[int]
     attention_mask: list[int]
@@ -24,15 +24,17 @@ class Tokenizer:
     def from_pretrained(repo_id: str) -> "Tokenizer":
         """Download and load a tokenizer from the HuggingFace Hub."""
         ...
-    def encode(self, text: str, add_special_tokens: bool = True) -> list[int]:
-        """Encode text into token IDs."""
+    def encode(self, text: str, add_special_tokens: bool = True) -> Encoding:
+        """Encode text into an Encoding (ids, attention_mask, type_ids)."""
         ...
-    def encode_batch(self, texts: list[str], add_special_tokens: bool = True) -> list[list[int]]:
-        """Encode multiple texts in parallel."""
+    def encode_batch(
+        self, texts: list[str], add_special_tokens: bool = True
+    ) -> list[Encoding]:
+        """Encode multiple texts in parallel, returning a list of Encoding objects."""
         ...
     def encode_pair(
         self, text_a: str, text_b: str, add_special_tokens: bool = True
-    ) -> EncodingPair:
+    ) -> Encoding:
         """Encode a pair of texts (e.g. for cross-encoder models)."""
         ...
     def encode_bytes(self, data: bytes) -> list[int]:
@@ -53,9 +55,40 @@ class Tokenizer:
     def save(self, path: str) -> None:
         """Save the tokenizer to a .tkz binary file."""
         ...
+    def enable_padding(
+        self,
+        *,
+        direction: str = "right",
+        pad_id: int = 0,
+        pad_type_id: int = 0,
+        length: Optional[int] = None,
+        pad_to_multiple_of: Optional[int] = None,
+    ) -> None:
+        """Enable padding for encode_batch."""
+        ...
+    def enable_truncation(
+        self,
+        max_length: int,
+        *,
+        stride: int = 0,
+        strategy: str = "longest_first",
+        direction: str = "right",
+    ) -> None:
+        """Enable truncation."""
+        ...
+    def no_padding(self) -> None:
+        """Disable padding."""
+        ...
+    def no_truncation(self) -> None:
+        """Disable truncation."""
+        ...
     @property
     def vocab_size(self) -> int:
         """The vocabulary size."""
+        ...
+    @property
+    def pad_token_id(self) -> Optional[int]:
+        """The pad token ID, if set."""
         ...
     def __repr__(self) -> str: ...
 

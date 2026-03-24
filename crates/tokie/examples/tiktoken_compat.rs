@@ -51,19 +51,19 @@ fn test_model(repo_id: &str, texts: &[&str]) {
             println!("  Pretokenizer: {:?}", tokenizer.pretokenizer_type());
 
             for text in texts.iter().take(2) {
-                let tokie_tokens = tokenizer.encode(text, false);
+                let tokie_encoding = tokenizer.encode(text, false);
                 let display = if text.len() > 27 {
                     format!("{}...", &text[..27])
                 } else {
                     text.to_string()
                 };
-                println!("  {:30} -> {} tokens", display, tokie_tokens.len());
+                println!("  {:30} -> {} tokens", display, tokie_encoding.ids.len());
             }
 
             // Roundtrip test
             let test = "Hello, world!";
-            let tokens = tokenizer.encode(test, false);
-            match tokenizer.decode(&tokens) {
+            let encoding = tokenizer.encode(test, false);
+            match tokenizer.decode(&encoding.ids) {
                 Some(decoded) if decoded == test => println!("  Roundtrip: OK"),
                 Some(decoded) => println!("  Roundtrip: MISMATCH ({:?})", decoded),
                 None => println!("  Roundtrip: DECODE FAILED"),

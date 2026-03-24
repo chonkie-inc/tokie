@@ -28,8 +28,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Test encoding
         let text = "Hello";
-        let tokens_no_special = tokenizer.encode(text, false);
-        let tokens_with_special = tokenizer.encode(text, true);
+        let tokens_no_special = tokenizer.encode(text, false).ids;
+        let tokens_with_special = tokenizer.encode(text, true).ids;
 
         println!(
             "  encode(\"{}\", false) = {:?}",

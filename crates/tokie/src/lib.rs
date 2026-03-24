@@ -55,6 +55,7 @@ pub mod hf;
 #[cfg(feature = "hf")]
 mod hub;
 pub mod normalizer;
+pub mod padding;
 mod postprocessor;
 pub mod pretok;
 mod serde;
@@ -67,6 +68,7 @@ pub use hf::JsonLoadError;
 #[cfg(feature = "hf")]
 pub use hub::{FromPretrainedOptions, HubError};
 pub use normalizer::{bert_uncased_normalize, clean_text, fnr, metaspace_normalize, strip_accents, FnrFinder, Normalizer};
+pub use padding::{Encoding, PaddingParams, PaddingStrategy, PaddingDirection, TruncationParams, TruncationStrategy, TruncationDirection};
 pub use postprocessor::PostProcessor;
 pub use pretok::{Pretok, PretokIter, PretokType, RegexPretok};
 pub use serde::SerdeError;

@@ -11,20 +11,13 @@ use crate::encoder::{Encoder, EncoderIter, EncoderType};
 use crate::decoder::Decoder;
 use crate::hf::{self, JsonLoadError};
 use crate::normalizer::Normalizer;
+use crate::padding::{Encoding, PaddingParams, TruncationParams, pad_batch, pad_encoding, truncate_ids, truncate_pair};
 use crate::postprocessor::PostProcessor;
 use crate::pretok::{Pretok, PretokType};
 use crate::types::TokenId;
 
-/// Result of encoding a pair of texts (e.g. for cross-encoder models).
-#[derive(Debug, Clone)]
-pub struct EncodingPair {
-    /// Token IDs for the combined pair.
-    pub ids: Vec<TokenId>,
-    /// Attention mask (1 for real tokens, used for padding in batches).
-    pub attention_mask: Vec<u8>,
-    /// Token type IDs (0 for first sequence, 1 for second sequence).
-    pub type_ids: Vec<u8>,
-}
+/// Backward-compatible alias for [`Encoding`].
+pub type EncodingPair = Encoding;
 
 /// High-level tokenizer combining pre-tokenization, BPE encoding, and decoding.
 ///
@@ -55,6 +48,12 @@ pub struct Tokenizer {
     normalizer: Normalizer,
     /// Post-processor for adding special tokens.
     post_processor: PostProcessor,
+    /// Pad token ID (from vocabulary, persisted in .tkz).
+    pad_token_id: Option<TokenId>,
+    /// Padding configuration (runtime, not serialized).
+    padding: Option<PaddingParams>,
+    /// Truncation configuration (runtime, not serialized).
+    truncation: Option<TruncationParams>,
 }
 
 impl Tokenizer {
@@ -74,6 +73,9 @@ impl Tokenizer {
             pretokenizer_type,
             normalizer,
             post_processor,
+            pad_token_id: None,
+            padding: None,
+            truncation: None,
         }
     }
 
@@ -152,59 +154,125 @@ impl Tokenizer {
     /// Below this threshold, sequential encoding is used to avoid overhead.
     const PARALLEL_CHUNK_THRESHOLD: usize = 10_000;
 
-    /// Encode text into token IDs.
+    // --- Padding / truncation configuration ---
+
+    /// Enable padding. Applied during `encode_batch()` and `encode_pair_batch()`.
     ///
-    /// Text is first normalized (if a normalizer is configured), then split
-    /// by the pre-tokenizer (if configured), then each piece is BPE-encoded.
-    /// For texts >= 10KB, uses chunked parallel encoding with per-thread normalization.
+    /// For single `encode()` with `PaddingStrategy::Fixed`, padding is also applied.
+    pub fn enable_padding(&mut self, params: PaddingParams) -> &mut Self {
+        self.padding = Some(params);
+        self
+    }
+
+    /// Enable truncation. Applied during `encode()`, `encode_batch()`, and `encode_pair()`.
+    pub fn enable_truncation(&mut self, params: TruncationParams) -> &mut Self {
+        self.truncation = Some(params);
+        self
+    }
+
+    /// Disable padding.
+    pub fn no_padding(&mut self) -> &mut Self {
+        self.padding = None;
+        self
+    }
+
+    /// Disable truncation.
+    pub fn no_truncation(&mut self) -> &mut Self {
+        self.truncation = None;
+        self
+    }
+
+    /// Set the pad token ID.
+    pub fn set_pad_token_id(&mut self, id: TokenId) -> &mut Self {
+        self.pad_token_id = Some(id);
+        self
+    }
+
+    /// Get the pad token ID, if set.
+    pub fn pad_token_id(&self) -> Option<TokenId> {
+        self.pad_token_id
+    }
+
+    /// Get current padding configuration.
+    pub fn padding(&self) -> Option<&PaddingParams> {
+        self.padding.as_ref()
+    }
+
+    /// Get current truncation configuration.
+    pub fn truncation(&self) -> Option<&TruncationParams> {
+        self.truncation.as_ref()
+    }
+
+    // --- Encoding ---
+
+    /// Encode text into an [`Encoding`] with token IDs, attention mask, and type IDs.
     ///
-    /// If `add_special_tokens` is true, post-processing is applied (e.g., adding
-    /// `[CLS]` and `[SEP]` for BERT, or `<|begin_of_text|>` for LLaMA 3).
+    /// If truncation is configured, the output is truncated to `max_length`.
+    /// If padding is configured with `Fixed` strategy, the output is padded.
     ///
     /// # Example
     /// ```ignore
-    /// // Without special tokens (default for most use cases)
-    /// let tokens = tokenizer.encode("Hello, world!", false);
-    ///
-    /// // With special tokens (for model input)
-    /// let tokens = tokenizer.encode("Hello, world!", true);
+    /// let enc = tokenizer.encode("Hello, world!", true);
+    /// println!("ids: {:?}", enc.ids);
+    /// println!("attention_mask: {:?}", enc.attention_mask);
     /// ```
-    pub fn encode(&self, text: &str, add_special_tokens: bool) -> Vec<TokenId> {
-        let tokens = if text.len() >= Self::PARALLEL_CHUNK_THRESHOLD {
-            // Parallel path for large texts
-            self.encode_parallel(text, self.pretokenizer.as_ref())
-        } else {
-            // Sequential path
-            let normalized = self.normalizer.normalize(text);
-            match &self.pretokenizer {
-                Some(pretok) => self.encode_sequential(normalized.as_ref(), pretok),
-                None => self.encoder.encode(normalized.as_ref().as_bytes()),
-            }
-        };
+    pub fn encode(&self, text: &str, add_special_tokens: bool) -> Encoding {
+        let mut tokens = self.encode_raw(text, false);
 
-        // Apply post-processing if requested
-        if add_special_tokens {
+        // Apply truncation to content tokens (before special tokens)
+        if let Some(ref trunc) = self.truncation {
+            let special = if add_special_tokens {
+                self.post_processor.num_special_tokens_single()
+            } else {
+                0
+            };
+            let max_content = trunc.max_length.saturating_sub(special);
+            truncate_ids(&mut tokens, max_content, trunc.direction);
+        }
+
+        let ids = if add_special_tokens {
             self.post_processor.process(&tokens)
         } else {
             tokens
+        };
+
+        let mut encoding = Encoding::from_ids(ids);
+
+        // Apply fixed padding for single encode
+        if let Some(ref pad) = self.padding {
+            if let crate::padding::PaddingStrategy::Fixed(n) = pad.strategy {
+                pad_encoding(&mut encoding, n, pad);
+            }
         }
+
+        encoding
     }
 
-    /// Encode a pair of texts with special tokens and return IDs, attention mask, and type IDs.
+    /// Encode a pair of texts and return an [`Encoding`] with IDs, attention mask, and type IDs.
     ///
-    /// This is the equivalent of HuggingFace's `tokenizer.encode((text_a, text_b), add_special_tokens)`.
-    /// Used for cross-encoder models that take sentence pairs as input.
+    /// If truncation is configured, sequences are truncated according to the truncation strategy.
     ///
     /// # Example
     /// ```ignore
-    /// let pair = tokenizer.encode_pair("What is Berlin?", "Berlin is the capital of Germany.", true);
-    /// // pair.ids:            [CLS] query tokens [SEP] doc tokens [SEP]
-    /// // pair.type_ids:       0     0...         0     1...       1
-    /// // pair.attention_mask: 1     1...         1     1...       1
+    /// let enc = tokenizer.encode_pair("What is Berlin?", "Berlin is the capital of Germany.", true);
+    /// // enc.ids:            [CLS] query tokens [SEP] doc tokens [SEP]
+    /// // enc.type_ids:       0     0...         0     1...       1
+    /// // enc.attention_mask: 1     1...         1     1...       1
     /// ```
-    pub fn encode_pair(&self, text_a: &str, text_b: &str, add_special_tokens: bool) -> EncodingPair {
-        let tokens_a = self.encode(text_a, false);
-        let tokens_b = self.encode(text_b, false);
+    pub fn encode_pair(&self, text_a: &str, text_b: &str, add_special_tokens: bool) -> Encoding {
+        let mut tokens_a = self.encode_raw(text_a, false);
+        let mut tokens_b = self.encode_raw(text_b, false);
+
+        // Apply truncation to content tokens (before special tokens)
+        if let Some(ref trunc) = self.truncation {
+            let special = if add_special_tokens {
+                self.post_processor.num_special_tokens_pair()
+            } else {
+                0
+            };
+            let max_content = trunc.max_length.saturating_sub(special);
+            truncate_pair(&mut tokens_a, &mut tokens_b, max_content, trunc.strategy, trunc.direction);
+        }
 
         let (ids, type_ids) = if add_special_tokens {
             self.post_processor.process_pair(&tokens_a, &tokens_b)
@@ -217,8 +285,28 @@ impl Tokenizer {
             (ids, type_ids)
         };
 
-        let attention_mask = vec![1u8; ids.len()];
-        EncodingPair { ids, attention_mask, type_ids }
+        Encoding::from_pair(ids, type_ids)
+    }
+
+    /// Encode text to raw token IDs (internal helper, no Encoding wrapper).
+    ///
+    /// This is the core encoding path used by all public methods.
+    fn encode_raw(&self, text: &str, add_special_tokens: bool) -> Vec<TokenId> {
+        let tokens = if text.len() >= Self::PARALLEL_CHUNK_THRESHOLD {
+            self.encode_parallel(text, self.pretokenizer.as_ref())
+        } else {
+            let normalized = self.normalizer.normalize(text);
+            match &self.pretokenizer {
+                Some(pretok) => self.encode_sequential(normalized.as_ref(), pretok),
+                None => self.encoder.encode(normalized.as_ref().as_bytes()),
+            }
+        };
+
+        if add_special_tokens {
+            self.post_processor.process(&tokens)
+        } else {
+            tokens
+        }
     }
 
     /// Sequential encoding: pretokenize then BPE encode each piece.
@@ -355,35 +443,38 @@ impl Tokenizer {
         self.decoder.token_to_bytes(token)
     }
 
-    /// Encode multiple texts in parallel.
+    /// Encode multiple texts in parallel, returning [`Encoding`] for each.
     ///
-    /// Distributes texts across threads for inter-text parallelism.
-    /// For texts >= 10KB, each text also benefits from intra-text parallelism
-    /// via `encode()`.
+    /// If truncation is configured, each text is truncated.
+    /// If padding is configured, all encodings are padded to the same length.
     ///
     /// # Example
     /// ```ignore
     /// let texts = vec!["Hello, world!", "How are you?", "Goodbye!"];
-    /// let all_tokens = tokenizer.encode_batch(&texts, true);
-    /// assert_eq!(all_tokens.len(), 3);
+    /// let encodings = tokenizer.encode_batch(&texts, true);
+    /// assert_eq!(encodings.len(), 3);
     /// ```
-    pub fn encode_batch(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+    pub fn encode_batch(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Encoding> {
         let num_cpus = thread::available_parallelism()
             .map(|p| p.get())
             .unwrap_or(1);
 
-        // Use distributed approach when there are enough texts to keep all cores busy.
-        // Otherwise, sequential loop lets each encode() use internal parallelism.
-        if texts.len() > num_cpus {
+        let mut encodings = if texts.len() > num_cpus {
             self.encode_batch_distributed(texts, add_special_tokens)
         } else {
             self.encode_batch_sequential(texts, add_special_tokens)
+        };
+
+        // Apply batch padding after all texts are encoded
+        if let Some(ref pad) = self.padding {
+            pad_batch(&mut encodings, pad);
         }
+
+        encodings
     }
 
-    /// Approach A: distribute texts evenly across threads.
-    /// Each thread encodes its chunk of texts sequentially.
-    fn encode_batch_distributed(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+    /// Distribute texts evenly across threads for encoding.
+    fn encode_batch_distributed(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Encoding> {
         if texts.is_empty() {
             return Vec::new();
         }
@@ -413,13 +504,13 @@ impl Tokenizer {
 
             handles
                 .into_iter()
-                .flat_map(|h| h.join().unwrap())
+                .flat_map(|h: std::thread::ScopedJoinHandle<'_, Vec<Encoding>>| h.join().unwrap())
                 .collect()
         })
     }
 
-    /// Approach B: sequential loop, each encode() may parallelize internally.
-    fn encode_batch_sequential(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Vec<TokenId>> {
+    /// Sequential encoding loop, each encode() may parallelize internally.
+    fn encode_batch_sequential(&self, texts: &[&str], add_special_tokens: bool) -> Vec<Encoding> {
         texts.iter().map(|t| self.encode(t, add_special_tokens)).collect()
     }
 
@@ -471,7 +562,7 @@ impl Tokenizer {
     /// Uses the same parallelized encoding path as `encode()`.
     /// Does not include special tokens in the count.
     pub fn count_tokens(&self, text: &str) -> usize {
-        self.encode(text, false).len()
+        self.encode_raw(text, false).len()
     }
 
     /// Returns a lazy token count that supports comparison operators.
@@ -585,6 +676,7 @@ impl std::iter::FusedIterator for TokenizeIter<'_> {}
 mod tests {
     use super::*;
     use crate::encoder::BacktrackingBytePairEncoder;
+    use crate::padding::{PaddingStrategy, PaddingDirection, TruncationStrategy, TruncationDirection};
 
     fn make_test_tokenizer() -> Tokenizer {
         // Simple encoder: a=0, b=1, c=2, space=3
@@ -604,82 +696,74 @@ mod tests {
         Tokenizer::new(Encoder::Backtracking(encoder), decoder, PretokType::Gpt2, Normalizer::None, PostProcessor::None)
     }
 
+    fn make_bert_tokenizer() -> Tokenizer {
+        let base_tokens: Vec<Vec<u8>> = (0u8..=255).map(|b| vec![b]).collect();
+        let merges = vec![(b'a' as u32, b'b' as u32)];
+        let (encoder, token_bytes) = BacktrackingBytePairEncoder::from_merges(&merges, &base_tokens);
+        let decoder = Decoder::new(token_bytes);
+        Tokenizer::new(Encoder::Backtracking(encoder), decoder, PretokType::None, Normalizer::None, PostProcessor::bert(101, 102))
+    }
+
     #[test]
     fn test_tokenizer_no_pretokenizer() {
         let tokenizer = make_test_tokenizer();
-
-        let tokens = tokenizer.encode("abc", false);
+        let enc = tokenizer.encode("abc", false);
         // 'a'+'b' merges to token 256, then 'c' is token 99
-        assert_eq!(tokens.len(), 2);
+        assert_eq!(enc.ids.len(), 2);
+    }
+
+    #[test]
+    fn test_encode_returns_encoding() {
+        let tokenizer = make_test_tokenizer();
+        let enc = tokenizer.encode("abc", false);
+        assert_eq!(enc.ids.len(), enc.attention_mask.len());
+        assert_eq!(enc.ids.len(), enc.type_ids.len());
+        assert!(enc.attention_mask.iter().all(|&m| m == 1));
+        assert!(enc.type_ids.iter().all(|&t| t == 0));
     }
 
     #[test]
     fn test_tokenizer_with_pretokenizer() {
         let tokenizer = make_test_tokenizer_with_pretokenizer();
-
-        // "Hello world" gets pre-tokenized to ["Hello", " world"]
-        let tokens = tokenizer.encode("Hello world", false);
-        assert!(!tokens.is_empty());
-
-        // Verify decode roundtrip
-        let decoded = tokenizer.decode(&tokens).unwrap();
+        let enc = tokenizer.encode("Hello world", false);
+        assert!(!enc.ids.is_empty());
+        let decoded = tokenizer.decode(&enc.ids).unwrap();
         assert_eq!(decoded, "Hello world");
     }
 
     #[test]
     fn test_count_tokens() {
         let tokenizer = make_test_tokenizer_with_pretokenizer();
-
         let text = "Hello world";
         let count = tokenizer.count_tokens(text);
-        let tokens = tokenizer.encode(text, false);
-        assert_eq!(count, tokens.len());
+        let enc = tokenizer.encode(text, false);
+        assert_eq!(count, enc.ids.len());
     }
 
     #[test]
     fn test_token_count_comparisons() {
         let tokenizer = make_test_tokenizer_with_pretokenizer();
-
         let text = "Hello world test";
         let total = tokenizer.count_tokens(text);
-
-        // Greater than
         assert!(tokenizer.token_count(text) > total - 1);
         assert!(!(tokenizer.token_count(text) > total));
-
-        // Less than
         assert!(tokenizer.token_count(text) < total + 1);
         assert!(!(tokenizer.token_count(text) < total));
-
-        // Equal
         assert!(tokenizer.token_count(text) == total);
-        assert!(!(tokenizer.token_count(text) == total + 1));
-
-        // Greater than or equal
-        assert!(tokenizer.token_count(text) >= total);
-        assert!(tokenizer.token_count(text) >= total - 1);
-        assert!(!(tokenizer.token_count(text) >= total + 1));
-
-        // Less than or equal
-        assert!(tokenizer.token_count(text) <= total);
-        assert!(tokenizer.token_count(text) <= total + 1);
-        assert!(!(tokenizer.token_count(text) <= total - 1));
     }
 
     #[test]
     fn test_encode_iter() {
         let tokenizer = make_test_tokenizer_with_pretokenizer();
-
         let text = "Hello world";
         let tokens: Vec<_> = tokenizer.encode_iter(text).collect();
-        let expected = tokenizer.encode(text, false);
+        let expected = tokenizer.encode_raw(text, false);
         assert_eq!(tokens, expected);
     }
 
     #[test]
     fn test_decode_bytes() {
         let tokenizer = make_test_tokenizer();
-
         let text = b"abc";
         let tokens = tokenizer.encode_bytes(text);
         let decoded = tokenizer.decode_bytes(&tokens);
@@ -735,8 +819,6 @@ mod tests {
         let texts = vec!["Hello", "world"];
         let batch_with = tokenizer.encode_batch(&texts, true);
         let batch_without = tokenizer.encode_batch(&texts, false);
-        // Results should differ if post-processor adds tokens
-        // With no post-processor (PostProcessor::None), they should be equal
         assert_eq!(batch_with, batch_without);
     }
 
@@ -765,5 +847,145 @@ mod tests {
         let tokenizer = make_test_tokenizer();
         let result = tokenizer.count_tokens_batch(&[]);
         assert!(result.is_empty());
+    }
+
+    // --- Truncation tests ---
+
+    #[test]
+    fn test_encode_with_truncation() {
+        let mut tokenizer = make_test_tokenizer();
+        // "abcde" without merges would be 5 tokens, with a+b merge = 4 tokens
+        // Set max_length to 3
+        tokenizer.enable_truncation(TruncationParams {
+            max_length: 3,
+            strategy: TruncationStrategy::LongestFirst,
+            direction: TruncationDirection::Right,
+            stride: 0,
+        });
+        let enc = tokenizer.encode("abcde", false);
+        assert!(enc.ids.len() <= 3);
+    }
+
+    #[test]
+    fn test_encode_truncation_preserves_special_tokens() {
+        let mut tokenizer = make_bert_tokenizer();
+        // BERT: [CLS] tokens [SEP] = 2 special tokens
+        tokenizer.enable_truncation(TruncationParams {
+            max_length: 4,
+            strategy: TruncationStrategy::LongestFirst,
+            direction: TruncationDirection::Right,
+            stride: 0,
+        });
+        let enc = tokenizer.encode("abcde", true);
+        assert!(enc.ids.len() <= 4);
+        // First token should be CLS (101), last should be SEP (102)
+        assert_eq!(enc.ids[0], 101);
+        assert_eq!(*enc.ids.last().unwrap(), 102);
+    }
+
+    #[test]
+    fn test_encode_pair_with_truncation() {
+        let mut tokenizer = make_bert_tokenizer();
+        // BERT pair: [CLS] A [SEP] B [SEP] = 3 special tokens
+        tokenizer.enable_truncation(TruncationParams {
+            max_length: 7,
+            strategy: TruncationStrategy::LongestFirst,
+            direction: TruncationDirection::Right,
+            stride: 0,
+        });
+        let enc = tokenizer.encode_pair("abcde", "fghij", true);
+        assert!(enc.ids.len() <= 7);
+        assert_eq!(enc.ids[0], 101); // CLS
+    }
+
+    // --- Padding tests ---
+
+    #[test]
+    fn test_encode_batch_with_padding() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.enable_padding(PaddingParams {
+            strategy: PaddingStrategy::BatchLongest,
+            pad_id: 0,
+            ..Default::default()
+        });
+        let batch = tokenizer.encode_batch(&["ab", "abcde"], false);
+        // All encodings should be same length (longest)
+        assert_eq!(batch[0].ids.len(), batch[1].ids.len());
+        // Shorter one should have 0s in attention_mask
+        let short_mask = &batch[0].attention_mask;
+        assert!(short_mask.iter().any(|&m| m == 0));
+        // Longer one should have all 1s
+        assert!(batch[1].attention_mask.iter().all(|&m| m == 1));
+    }
+
+    #[test]
+    fn test_encode_with_fixed_padding() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.enable_padding(PaddingParams {
+            strategy: PaddingStrategy::Fixed(10),
+            pad_id: 0,
+            ..Default::default()
+        });
+        let enc = tokenizer.encode("ab", false);
+        assert_eq!(enc.ids.len(), 10);
+        assert_eq!(enc.attention_mask.iter().filter(|&&m| m == 0).count(), 10 - 1); // "ab" merges to 1 token
+    }
+
+    #[test]
+    fn test_encode_batch_with_fixed_padding() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.enable_padding(PaddingParams {
+            strategy: PaddingStrategy::Fixed(8),
+            pad_id: 0,
+            ..Default::default()
+        });
+        let batch = tokenizer.encode_batch(&["ab", "cd", "e"], false);
+        assert!(batch.iter().all(|e| e.ids.len() == 8));
+    }
+
+    #[test]
+    fn test_encode_batch_left_padding() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.enable_padding(PaddingParams {
+            strategy: PaddingStrategy::Fixed(5),
+            direction: PaddingDirection::Left,
+            pad_id: 0,
+            ..Default::default()
+        });
+        let enc = tokenizer.encode("ab", false);
+        // "ab" merges to 1 token, left padded to 5
+        assert_eq!(enc.ids.len(), 5);
+        assert_eq!(enc.attention_mask[0], 0); // left side is padding
+        assert_eq!(*enc.attention_mask.last().unwrap(), 1); // right side is real
+    }
+
+    #[test]
+    fn test_no_padding_no_truncation_defaults() {
+        let tokenizer = make_test_tokenizer();
+        assert!(tokenizer.padding().is_none());
+        assert!(tokenizer.truncation().is_none());
+        assert!(tokenizer.pad_token_id().is_none());
+    }
+
+    #[test]
+    fn test_config_methods() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.enable_padding(PaddingParams::default());
+        assert!(tokenizer.padding().is_some());
+        tokenizer.no_padding();
+        assert!(tokenizer.padding().is_none());
+
+        tokenizer.enable_truncation(TruncationParams {
+            max_length: 512,
+            strategy: TruncationStrategy::LongestFirst,
+            direction: TruncationDirection::Right,
+            stride: 0,
+        });
+        assert!(tokenizer.truncation().is_some());
+        tokenizer.no_truncation();
+        assert!(tokenizer.truncation().is_none());
+
+        tokenizer.set_pad_token_id(0);
+        assert_eq!(tokenizer.pad_token_id(), Some(0));
     }
 }

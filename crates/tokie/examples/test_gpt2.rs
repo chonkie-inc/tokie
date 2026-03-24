@@ -14,11 +14,11 @@ fn main() {
     // Test on progressively longer text
     for size in [100, 500, 1000, 5000, 10000, 50000] {
         let slice = &text[..size.min(text.len())];
-        let tokens = tokenizer.encode(slice, false);
-        println!("{:6} bytes -> {:5} tokens", size, tokens.len());
+        let encoding = tokenizer.encode(slice, false);
+        println!("{:6} bytes -> {:5} tokens", size, encoding.ids.len());
 
         // Verify decode roundtrip
-        let decoded = tokenizer.decode(&tokens).unwrap();
+        let decoded = tokenizer.decode(&encoding.ids).unwrap();
         if decoded != slice {
             println!("  WARNING: Decode mismatch!");
         }
@@ -27,10 +27,10 @@ fn main() {
     // Full benchmark
     println!("\nFull encoding:");
     let start = std::time::Instant::now();
-    let tokens = tokenizer.encode(&text, false);
+    let encoding = tokenizer.encode(&text, false);
     let elapsed = start.elapsed();
     println!("  {} tokens in {:.1} ms ({:.1} MB/s)",
-             tokens.len(),
+             encoding.ids.len(),
              elapsed.as_secs_f64() * 1000.0,
              text.len() as f64 / elapsed.as_secs_f64() / 1_000_000.0);
 }

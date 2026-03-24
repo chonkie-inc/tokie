@@ -109,7 +109,7 @@ fn main() {
     let start = Instant::now();
     let mut full_tokens = 0;
     for _ in 0..iterations {
-        full_tokens = tokie.encode(&text, false).len();
+        full_tokens = tokie.encode(&text, false).ids.len();
     }
     let elapsed = start.elapsed();
     println!("  Time: {:.2} ms/iter", elapsed.as_secs_f64() * 1000.0 / iterations as f64);

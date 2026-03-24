@@ -8,14 +8,25 @@ def test_from_pretrained_bert():
     assert repr(t) == "Tokenizer(vocab_size=30522)"
 
 
+def test_encode_returns_encoding():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    enc = t.encode("Hello, world!")
+    assert isinstance(enc, tokie.Encoding)
+    assert isinstance(enc.ids, list)
+    assert isinstance(enc.attention_mask, list)
+    assert isinstance(enc.type_ids, list)
+    assert len(enc) == len(enc.ids)
+    assert all(m == 1 for m in enc.attention_mask)
+    assert all(t == 0 for t in enc.type_ids)
+
+
 def test_encode_decode_roundtrip():
     t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
     text = "Hello, world!"
-    tokens = t.encode(text)
-    decoded = t.decode(tokens)
-    # BERT adds [CLS] and [SEP], decode includes them
-    assert isinstance(tokens, list)
-    assert all(isinstance(tok, int) for tok in tokens)
+    enc = t.encode(text)
+    decoded = t.decode(enc.ids)
+    assert isinstance(enc.ids, list)
+    assert all(isinstance(tok, int) for tok in enc.ids)
     assert isinstance(decoded, str)
 
 
@@ -37,6 +48,7 @@ def test_count_tokens():
 def test_encode_pair():
     t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
     pair = t.encode_pair("How are you?", "I am fine.")
+    assert isinstance(pair, tokie.Encoding)
     assert isinstance(pair.ids, list)
     assert isinstance(pair.attention_mask, list)
     assert isinstance(pair.type_ids, list)
@@ -57,8 +69,8 @@ def test_encode_bytes():
 
 def test_decode_bytes():
     t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
-    tokens = t.encode("hello")
-    raw = t.decode_bytes(tokens)
+    enc = t.encode("hello")
+    raw = t.decode_bytes(enc.ids)
     assert isinstance(raw, bytes)
 
 
@@ -68,7 +80,7 @@ def test_save_load_roundtrip(tmp_path):
     t.save(path)
     t2 = tokie.Tokenizer.from_file(path)
     assert t2.vocab_size == t.vocab_size
-    assert t2.encode("test") == t.encode("test")
+    assert t2.encode("test").ids == t.encode("test").ids
 
 
 def test_error_handling():
@@ -78,10 +90,10 @@ def test_error_handling():
 
 def test_gpt2():
     t = tokie.Tokenizer.from_pretrained("openai-community/gpt2")
-    tokens = t.encode("Hello, world!", add_special_tokens=False)
-    assert isinstance(tokens, list)
-    assert len(tokens) > 0
-    decoded = t.decode(tokens)
+    enc = t.encode("Hello, world!", add_special_tokens=False)
+    assert isinstance(enc.ids, list)
+    assert len(enc) > 0
+    decoded = t.decode(enc.ids)
     assert decoded == "Hello, world!"
 
 
@@ -91,7 +103,7 @@ def test_encode_batch_basic():
     batch = t.encode_batch(texts)
     assert len(batch) == 5
     for i, text in enumerate(texts):
-        assert batch[i] == t.encode(text)
+        assert batch[i].ids == t.encode(text).ids
 
 
 def test_encode_batch_empty():
@@ -105,7 +117,7 @@ def test_encode_batch_preserves_order():
     batch = t.encode_batch(texts)
     assert len(batch) == 50
     for i, text in enumerate(texts):
-        assert batch[i] == t.encode(text), f"Mismatch at index {i}"
+        assert batch[i].ids == t.encode(text).ids, f"Mismatch at index {i}"
 
 
 def test_encode_batch_without_special_tokens():
@@ -129,3 +141,58 @@ def test_count_tokens_batch():
 def test_count_tokens_batch_empty():
     t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
     assert t.count_tokens_batch([]) == []
+
+
+def test_defaults_no_padding_no_truncation():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    enc = t.encode("Hello world")
+    # No padding by default — attention_mask all 1s, type_ids all 0s
+    assert all(m == 1 for m in enc.attention_mask)
+    assert all(t == 0 for t in enc.type_ids)
+
+
+def test_pad_token_id_property():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    # BERT should have [PAD] token
+    assert t.pad_token_id is not None
+    assert t.pad_token_id == 0  # [PAD] is typically token 0 in BERT
+
+
+def test_enable_truncation():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    t.enable_truncation(max_length=8)
+    enc = t.encode("This is a test sentence that should be truncated to fit", add_special_tokens=True)
+    assert len(enc) <= 8
+
+
+def test_enable_padding_batch():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    t.enable_padding()
+    results = t.encode_batch(["Hello world", "Short", "A much longer sentence for testing purposes"])
+    # All should be same length (padded to longest)
+    lengths = [len(r) for r in results]
+    assert len(set(lengths)) == 1  # all same length
+    # Shorter sequences should have 0s in attention_mask
+    max_len = lengths[0]
+    for r in results:
+        assert len(r.attention_mask) == max_len
+        # Check that non-padded tokens have attention_mask=1
+        assert r.attention_mask[0] == 1
+
+
+def test_enable_padding_fixed():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    t.enable_padding(length=16)
+    results = t.encode_batch(["Hello", "World"])
+    assert all(len(r) == 16 for r in results)
+
+
+def test_no_padding_no_truncation():
+    t = tokie.Tokenizer.from_pretrained("bert-base-uncased")
+    t.enable_padding(length=16)
+    t.enable_truncation(max_length=8)
+    t.no_padding()
+    t.no_truncation()
+    # Should behave as default now
+    enc = t.encode("Hello world test sentence")
+    assert all(m == 1 for m in enc.attention_mask)

@@ -26,7 +26,7 @@ fn main() {
     let start = Instant::now();
     let mut tokie_tokens = 0;
     for _ in 0..ITERATIONS {
-        tokie_tokens = tokie.encode(&text, false).len();
+        tokie_tokens = tokie.encode(&text, false).ids.len();
     }
     let tokie_time = start.elapsed();
     let tokie_tp = (bytes * ITERATIONS) as f64 / tokie_time.as_secs_f64() / 1024.0 / 1024.0;

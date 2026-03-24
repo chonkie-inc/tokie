@@ -78,7 +78,7 @@ fn main() {
         let mut pass = 0;
         let mut fail = 0;
         for text in &test_texts {
-            let tokie_ids = tokie.encode(text, false);
+            let tokie_ids = tokie.encode(text, false).ids;
             let hf_encoding = hf.encode(text.to_string(), false).unwrap();
             let hf_ids = strip_padding(hf_encoding.get_ids());
 
@@ -109,7 +109,7 @@ fn main() {
     match (tokie, hf) {
         (Ok(t), Ok(h)) => {
             let text = "Hello world";
-            let tokie_ids = t.encode(text, false);
+            let tokie_ids = t.encode(text, false).ids;
             let hf_encoding = h.encode(text.to_string(), false).unwrap();
             let hf_ids = strip_padding(hf_encoding.get_ids());
             println!("  tokie: {:?}", tokie_ids);

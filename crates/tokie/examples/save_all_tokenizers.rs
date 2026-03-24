@@ -75,10 +75,10 @@ fn find_tokenizer_json(snapshots_path: &std::path::Path) -> Option<std::path::Pa
 fn verify(path: &str) {
     let loaded = Tokenizer::from_file(path).unwrap();
     let text = "Hello, world! Testing tokenizer.";
-    let tokens = loaded.encode(text, false);
-    let decoded = loaded.decode(&tokens).unwrap();
+    let encoding = loaded.encode(text, false);
+    let decoded = loaded.decode(&encoding.ids).unwrap();
     if decoded == text {
-        println!("  Verified: encode/decode roundtrip OK ({} tokens)", tokens.len());
+        println!("  Verified: encode/decode roundtrip OK ({} tokens)", encoding.ids.len());
     } else {
         println!("  WARNING: decode mismatch!");
     }

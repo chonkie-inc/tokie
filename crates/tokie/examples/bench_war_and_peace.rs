@@ -45,7 +45,7 @@ fn main() {
     let start = Instant::now();
     let tokie_result = tokie_tok.encode(&text, false);
     let tokie_elapsed = start.elapsed();
-    let tokie_tokens = tokie_result.len();
+    let tokie_tokens = tokie_result.ids.len();
     let tokie_throughput = bytes as f64 / tokie_elapsed.as_secs_f64() / 1_000_000.0;
 
     let speedup = tokie_throughput / hf_throughput;
@@ -57,11 +57,11 @@ fn main() {
 
     // Verify correctness
     let hf_ids: Vec<u32> = hf_result.get_ids().to_vec();
-    if hf_ids == tokie_result {
+    if hf_ids == tokie_result.ids {
         println!("Output matches HuggingFace!");
     } else {
         println!("WARNING: Output mismatch!");
         println!("  HF tokens:    {}", hf_ids.len());
-        println!("  Tokie tokens: {}", tokie_result.len());
+        println!("  Tokie tokens: {}", tokie_result.ids.len());
     }
 }

@@ -138,7 +138,8 @@ fn main() {
 
         // Encode with tokie
         let start = Instant::now();
-        let tokie_tokens = tokie.encode(&text, false);
+        let tokie_encoding = tokie.encode(&text, false);
+        let tokie_tokens = tokie_encoding.ids;
         let tokie_time = start.elapsed().as_secs_f64();
         let tokie_throughput = text_mb / tokie_time;
 

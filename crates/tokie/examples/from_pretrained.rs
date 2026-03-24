@@ -15,11 +15,11 @@ fn main() {
     let text = "Hello, world! This is a test of the tokie tokenizer.";
     println!("Text: {:?}\n", text);
 
-    let tokens = tokenizer.encode(text, false);
-    println!("Tokens: {:?}", tokens);
-    println!("Token count: {}\n", tokens.len());
+    let encoding = tokenizer.encode(text, false);
+    println!("Tokens: {:?}", encoding.ids);
+    println!("Token count: {}\n", encoding.ids.len());
 
-    let decoded = tokenizer.decode(&tokens).unwrap();
+    let decoded = tokenizer.decode(&encoding.ids).unwrap();
     println!("Decoded: {:?}", decoded);
 
     assert_eq!(text, decoded, "Roundtrip failed!");

@@ -57,7 +57,7 @@ fn main() {
     let mut all_match = true;
     for text in test_texts {
         let hf_tokens: Vec<u32> = hf_tok.encode(text, false).unwrap().get_ids().to_vec();
-        let tokie_tokens = tokie_tok.encode(text, false);
+        let tokie_tokens = tokie_tok.encode(text, false).ids;
         if hf_tokens != tokie_tokens {
             println!("MISMATCH for {:?}", &text[..text.len().min(50)]);
             println!("  HF:    {:?}", &hf_tokens[..hf_tokens.len().min(10)]);
@@ -90,7 +90,7 @@ fn benchmark(hf_tok: &HfTokenizer, tokie_tok: &tokie::Tokenizer, text: &str, ite
     let start = Instant::now();
     let mut tokie_tokens = 0;
     for _ in 0..iterations {
-        tokie_tokens = tokie_tok.encode(text, false).len();
+        tokie_tokens = tokie_tok.encode(text, false).ids.len();
     }
     let tokie_elapsed = start.elapsed();
     let tokie_throughput =

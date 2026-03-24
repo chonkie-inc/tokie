@@ -55,7 +55,7 @@ fn bench_model(name: &'static str, model_id: &str, text: &str) -> Option<BenchRe
 
     // Benchmark Tokie
     let start = Instant::now();
-    let tokie_result = tokie_tok.encode(text, false);
+    let tokie_result = tokie_tok.encode(text, false).ids;
     let tokie_elapsed = start.elapsed();
     let tokie_tokens = tokie_result.len();
     let tokie_throughput = bytes as f64 / tokie_elapsed.as_secs_f64() / 1_000_000.0;

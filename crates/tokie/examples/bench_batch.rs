@@ -61,7 +61,7 @@ fn bench_workload(tokie_tok: &tokie::Tokenizer, hf_tok: &tokenizers::Tokenizer, 
     let mut token_count_a = 0;
     for _ in 0..ITERATIONS {
         let results = tokie_tok.encode_batch(texts, false);
-        token_count_a = results.iter().map(|r| r.len()).sum();
+        token_count_a = results.iter().map(|r| r.ids.len()).sum();
     }
     let elapsed_a = start.elapsed() / ITERATIONS as u32;
     let tp_a = mb / elapsed_a.as_secs_f64();
@@ -72,8 +72,8 @@ fn bench_workload(tokie_tok: &tokie::Tokenizer, hf_tok: &tokenizers::Tokenizer, 
     let start = Instant::now();
     let mut token_count_b = 0;
     for _ in 0..ITERATIONS {
-        let results: Vec<Vec<u32>> = texts.iter().map(|t| tokie_tok.encode(t, false)).collect();
-        token_count_b = results.iter().map(|r| r.len()).sum();
+        let results: Vec<_> = texts.iter().map(|t| tokie_tok.encode(t, false)).collect();
+        token_count_b = results.iter().map(|r| r.ids.len()).sum();
     }
     let elapsed_b = start.elapsed() / ITERATIONS as u32;
     let tp_b = mb / elapsed_b.as_secs_f64();

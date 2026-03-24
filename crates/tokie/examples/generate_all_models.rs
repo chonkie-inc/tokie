@@ -193,7 +193,7 @@ fn benchmark_tkz(path: &Path, text: &str) -> Option<(f64, f64)> {
     // Warm up
     let _ = tokenizer.encode(text, false);
 
-    // Benchmark encoding (3 iterations)
+    // Benchmark encoding (3 iterations - result discarded)
     let enc_start = Instant::now();
     for _ in 0..3 {
         let _ = tokenizer.encode(text, false);

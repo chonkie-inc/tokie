@@ -137,7 +137,7 @@ fn test_pretok_counts(name: &str, text: &str, pretok: &Pretok, num_cpus: usize) 
 }
 
 fn test_encode_accuracy(name: &str, text: &str, tokenizer: &Tokenizer, num_cpus: usize) {
-    let sequential = tokenizer.encode(text, false);
+    let sequential = tokenizer.encode(text, false).ids;
     let parallel_newline = chunked_encode(text, tokenizer, num_cpus, b"\n");
     let parallel_space = chunked_encode(text, tokenizer, num_cpus, b" \n");
 
@@ -158,7 +158,7 @@ fn test_encode_accuracy(name: &str, text: &str, tokenizer: &Tokenizer, num_cpus:
 }
 
 fn test_encode_counts(name: &str, text: &str, tokenizer: &Tokenizer, num_cpus: usize) {
-    let sequential = tokenizer.encode(text, false).len();
+    let sequential = tokenizer.encode(text, false).ids.len();
     let parallel_newline = chunked_encode_count(text, tokenizer, num_cpus, b"\n");
     let parallel_space = chunked_encode_count(text, tokenizer, num_cpus, b" \n");
 
@@ -258,7 +258,7 @@ fn chunked_encode(text: &str, tokenizer: &Tokenizer, _num_cpus: usize, delimiter
     let target_size = 100.min(bytes.len() / 2);
 
     if target_size == 0 || bytes.len() < 10 {
-        return tokenizer.encode(text, false);
+        return tokenizer.encode(text, false).ids;
     }
 
     let chunks: Vec<&[u8]> = chunk(bytes)
@@ -268,7 +268,7 @@ fn chunked_encode(text: &str, tokenizer: &Tokenizer, _num_cpus: usize, delimiter
         .collect();
 
     if chunks.len() <= 1 {
-        return tokenizer.encode(text, false);
+        return tokenizer.encode(text, false).ids;
     }
 
     let pretok = tokenizer.pretokenizer().unwrap();
@@ -295,7 +295,7 @@ fn chunked_encode_count(
     let target_size = bytes.len() / num_cpus;
 
     if target_size == 0 {
-        return tokenizer.encode(text, false).len();
+        return tokenizer.encode(text, false).ids.len();
     }
 
     let chunks: Vec<&[u8]> = chunk(bytes)
@@ -305,7 +305,7 @@ fn chunked_encode_count(
         .collect();
 
     if chunks.len() == 1 {
-        return tokenizer.encode(text, false).len();
+        return tokenizer.encode(text, false).ids.len();
     }
 
     let pretok = tokenizer.pretokenizer().unwrap();

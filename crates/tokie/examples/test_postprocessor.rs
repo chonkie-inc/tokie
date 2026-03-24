@@ -15,11 +15,11 @@ fn main() {
         let text = "Hello";
 
         // Without special tokens
-        let tokens_no_special = bert.encode(text, false);
+        let tokens_no_special = bert.encode(text, false).ids;
         println!("encode({:?}, false) = {:?}", text, tokens_no_special);
 
         // With special tokens
-        let tokens_with_special = bert.encode(text, true);
+        let tokens_with_special = bert.encode(text, true).ids;
         println!("encode({:?}, true)  = {:?}", text, tokens_with_special);
 
         // BERT should add [CLS] at start and [SEP] at end
@@ -44,10 +44,10 @@ fn main() {
 
         let text = "Hello";
 
-        let tokens_no_special = gpt2.encode(text, false);
+        let tokens_no_special = gpt2.encode(text, false).ids;
         println!("encode({:?}, false) = {:?}", text, tokens_no_special);
 
-        let tokens_with_special = gpt2.encode(text, true);
+        let tokens_with_special = gpt2.encode(text, true).ids;
         println!("encode({:?}, true)  = {:?}", text, tokens_with_special);
 
         // GPT-2 has no post-processor, so both should be the same
@@ -69,10 +69,10 @@ fn main() {
 
         let text = "Hello";
 
-        let tokens_no_special = llama.encode(text, false);
+        let tokens_no_special = llama.encode(text, false).ids;
         println!("encode({:?}, false) = {:?}", text, tokens_no_special);
 
-        let tokens_with_special = llama.encode(text, true);
+        let tokens_with_special = llama.encode(text, true).ids;
         println!("encode({:?}, true)  = {:?}", text, tokens_with_special);
 
         // LLaMA 3 should add <|begin_of_text|> (128000) at start

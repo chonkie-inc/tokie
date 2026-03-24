@@ -8,7 +8,7 @@
 //! ```text
 //! Header (88 bytes):
 //!   - magic: "TOKI" (4 bytes)
-//!   - version: u32 (4 bytes) - currently v9
+//!   - version: u32 (4 bytes) - currently v11
 //!   - encoder_type: u32 (4 bytes) - 0=Backtracking, 1=Simple, 2=WordPiece
 //!   - pretokenizer_type: u32 (4 bytes) - 0=None, 1=GPT2, 2=CL100K, 3=O200K, 4=BERT, 5=Voyage
 //!   - normalizer_type: u32 (4 bytes) - 0=None, 1=BertUncased, 2=BertCased, 3=Nfc
@@ -16,7 +16,7 @@
 //!   - vocab_size: u32 (4 bytes)
 //!   - num_merges: u32 (4 bytes)
 //!   - num_base_tokens: u32 (4 bytes)
-//!   - reserved: u32 (4 bytes)
+//!   - pad_token_id: u32 (4 bytes) - 0xFFFFFFFF = None (v11+)
 //!   - token_data_offset: u32, token_data_checksum: u32
 //!   - merge_data_offset: u32, merge_data_checksum: u32
 //!   - daac_data_offset: u32, daac_data_checksum: u32
@@ -45,7 +45,7 @@ use daggrs::DoubleArrayAhoCorasick;
 use foldhash::HashMap as FoldHashMap;
 
 const MAGIC: &[u8; 4] = b"TOKI";
-const VERSION: u32 = 10; // v10 adds merged_id to merge data for Simple/SentencePiece
+const VERSION: u32 = 11; // v11 adds pad_token_id in reserved field (0xFFFFFFFF = None)
 const HEADER_SIZE: usize = 88;
 
 impl PretokType {
@@ -332,7 +332,9 @@ impl Tokenizer {
         writer.write_all(&(decoder.vocab_size() as u32).to_le_bytes())?;
         writer.write_all(&((encoder.vocab_size() - encoder.num_base_tokens()) as u32).to_le_bytes())?;
         writer.write_all(&(encoder.num_base_tokens() as u32).to_le_bytes())?;
-        writer.write_all(&0u32.to_le_bytes())?; // Reserved
+        // pad_token_id: 0xFFFFFFFF sentinel means None
+        let pad_token_id_raw = self.pad_token_id().unwrap_or(0xFFFF_FFFF);
+        writer.write_all(&pad_token_id_raw.to_le_bytes())?;
 
         // Interleaved offsets and checksums (5 sections × 8 bytes = 40 bytes)
         writer.write_all(&token_offset.to_le_bytes())?;
@@ -385,7 +387,7 @@ impl Tokenizer {
         }
 
         let version = u32::from_le_bytes(data[4..8].try_into().unwrap());
-        if version != VERSION {
+        if version != VERSION && version != 10 {
             return Err(SerdeError::UnsupportedVersion(version));
         }
 
@@ -406,7 +408,13 @@ impl Tokenizer {
         let vocab_size = u32::from_le_bytes(data[24..28].try_into().unwrap()) as usize;
         let _num_merges = u32::from_le_bytes(data[28..32].try_into().unwrap()) as usize;
         let num_base_tokens = u32::from_le_bytes(data[32..36].try_into().unwrap()) as usize;
-        // data[36..40] is reserved
+        // pad_token_id: v11+ stores in bytes 36-40, 0xFFFFFFFF = None; v10 has 0 (treat as None)
+        let pad_token_id_raw = u32::from_le_bytes(data[36..40].try_into().unwrap());
+        let pad_token_id = if version >= 11 && pad_token_id_raw != 0xFFFF_FFFF {
+            Some(pad_token_id_raw)
+        } else {
+            None
+        };
 
         // Section offsets and checksums (5 sections × 8 bytes = 40 bytes)
         let token_offset = u32::from_le_bytes(data[40..44].try_into().unwrap()) as usize;
@@ -578,7 +586,11 @@ impl Tokenizer {
         // Build decoder
         let decoder = Decoder::from_parts(decoder_data, decoder_offsets);
 
-        Ok(Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor))
+        let mut tokenizer = Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor);
+        if let Some(pad_id) = pad_token_id {
+            tokenizer.set_pad_token_id(pad_id);
+        }
+        Ok(tokenizer)
     }
 }
 
@@ -1017,8 +1029,8 @@ mod tests {
         // Verify encoding matches
         let test_texts = ["Hello world", "abcd", "test 123", "abcdabcd"];
         for text in test_texts {
-            let original_tokens = tokenizer.encode(text, false);
-            let loaded_tokens = loaded.encode(text, false);
+            let original_tokens = tokenizer.encode(text, false).ids;
+            let loaded_tokens = loaded.encode(text, false).ids;
             assert_eq!(
                 original_tokens, loaded_tokens,
                 "encoding mismatch for '{}'",
@@ -1027,7 +1039,7 @@ mod tests {
         }
 
         // Verify decoding matches
-        let tokens = tokenizer.encode("Hello world", false);
+        let tokens = tokenizer.encode("Hello world", false).ids;
         let original_decoded = tokenizer.decode(&tokens);
         let loaded_decoded = loaded.decode(&tokens);
         assert_eq!(original_decoded, loaded_decoded);
@@ -1049,7 +1061,7 @@ mod tests {
 
         // Verify encoding matches
         let text = "Hello world test";
-        assert_eq!(tokenizer.encode(text, false), loaded.encode(text, false));
+        assert_eq!(tokenizer.encode(text, false).ids, loaded.encode(text, false).ids);
 
         // Cleanup
         std::fs::remove_file(&temp_path).ok();
@@ -1074,6 +1086,36 @@ mod tests {
         let mut cursor = std::io::Cursor::new(&data);
         let result = Tokenizer::load(&mut cursor);
         assert!(matches!(result, Err(SerdeError::UnsupportedVersion(99))));
+    }
+
+    #[test]
+    fn test_pad_token_id_roundtrip() {
+        let mut tokenizer = make_test_tokenizer();
+        tokenizer.set_pad_token_id(42);
+
+        // Save to memory buffer
+        let mut buf = Vec::new();
+        tokenizer.save(&mut buf).expect("save failed");
+
+        // Load from buffer
+        let mut cursor = std::io::Cursor::new(&buf);
+        let loaded = Tokenizer::load(&mut cursor).expect("load failed");
+
+        assert_eq!(loaded.pad_token_id(), Some(42));
+    }
+
+    #[test]
+    fn test_pad_token_id_none_roundtrip() {
+        let tokenizer = make_test_tokenizer();
+        assert_eq!(tokenizer.pad_token_id(), None);
+
+        let mut buf = Vec::new();
+        tokenizer.save(&mut buf).expect("save failed");
+
+        let mut cursor = std::io::Cursor::new(&buf);
+        let loaded = Tokenizer::load(&mut cursor).expect("load failed");
+
+        assert_eq!(loaded.pad_token_id(), None);
     }
 
     #[test]
@@ -1102,8 +1144,8 @@ mod tests {
         // Verify encoding matches
         let test_texts = ["Hello world", "abcd", "test 123", "abcdabcd"];
         for text in test_texts {
-            let original_tokens = tokenizer.encode(text, false);
-            let loaded_tokens = loaded.encode(text, false);
+            let original_tokens = tokenizer.encode(text, false).ids;
+            let loaded_tokens = loaded.encode(text, false).ids;
             assert_eq!(
                 original_tokens, loaded_tokens,
                 "encoding mismatch for '{}'",
@@ -1112,7 +1154,7 @@ mod tests {
         }
 
         // Verify decoding matches
-        let tokens = tokenizer.encode("Hello world", false);
+        let tokens = tokenizer.encode("Hello world", false).ids;
         let original_decoded = tokenizer.decode(&tokens);
         let loaded_decoded = loaded.decode(&tokens);
         assert_eq!(original_decoded, loaded_decoded);

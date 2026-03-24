@@ -8,6 +8,7 @@ use crate::normalizer::Normalizer;
 use crate::postprocessor::PostProcessor;
 use crate::pretok::PretokType;
 use crate::tokenizer::Tokenizer;
+use crate::types::TokenId;
 
 /// Error loading from HuggingFace JSON format.
 #[derive(Debug)]
@@ -330,7 +331,11 @@ fn load_byte_level_bpe(
     let decoder = Decoder::new(token_bytes);
     let post_processor = detect_post_processor(data);
 
-    Ok(Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor))
+    let mut tokenizer = Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor);
+    if let Some(pad_id) = extract_pad_token_id(data) {
+        tokenizer.set_pad_token_id(pad_id);
+    }
+    Ok(tokenizer)
 }
 
 /// Load vocab-defined BPE tokenizer (LLaMA 3, Mistral, SentencePiece-style, etc.).
@@ -426,7 +431,11 @@ fn load_vocab_defined_bpe(
     let decoder = Decoder::new(token_bytes);
     let post_processor = detect_post_processor(data);
 
-    Ok(Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor))
+    let mut tokenizer = Tokenizer::new(encoder, decoder, pretokenizer_type, normalizer, post_processor);
+    if let Some(pad_id) = extract_pad_token_id(data) {
+        tokenizer.set_pad_token_id(pad_id);
+    }
+    Ok(tokenizer)
 }
 
 /// Parse a byte fallback token like `<0x0A>` and return the byte value.
@@ -864,7 +873,11 @@ fn load_wordpiece(
 
     let post_processor = detect_post_processor(data);
 
-    Ok(Tokenizer::new(Encoder::WordPiece(encoder), decoder, pretok, normalizer, post_processor))
+    let mut tokenizer = Tokenizer::new(Encoder::WordPiece(encoder), decoder, pretok, normalizer, post_processor);
+    if let Some(pad_id) = extract_pad_token_id(data) {
+        tokenizer.set_pad_token_id(pad_id);
+    }
+    Ok(tokenizer)
 }
 
 /// Load a Unigram tokenizer (SentencePiece Unigram models like T5, XLM-RoBERTa, ALBERT).
@@ -928,7 +941,11 @@ fn load_unigram(
 
     let post_processor = detect_post_processor(data);
 
-    Ok(Tokenizer::new(Encoder::Unigram(encoder), decoder, pretok, normalizer, post_processor))
+    let mut tokenizer = Tokenizer::new(Encoder::Unigram(encoder), decoder, pretok, normalizer, post_processor);
+    if let Some(pad_id) = extract_pad_token_id(data) {
+        tokenizer.set_pad_token_id(pad_id);
+    }
+    Ok(tokenizer)
 }
 
 /// Detect the post-processor type from HuggingFace JSON.
@@ -999,6 +1016,34 @@ fn parse_template_post_processor(data: &serde_json::Value, single: &[serde_json:
     } else {
         PostProcessor::None
     }
+}
+
+/// Extract pad_token_id from HuggingFace tokenizer.json.
+///
+/// Checks (in order):
+/// 1. `padding.pad_id` — HuggingFace tokenizer.json padding config
+/// 2. `added_tokens` — looks for tokens named `[PAD]`, `<pad>`, or `<|pad|>`
+fn extract_pad_token_id(data: &serde_json::Value) -> Option<TokenId> {
+    // Check padding config
+    if let Some(pad_id) = data["padding"]["pad_id"].as_u64() {
+        return Some(pad_id as TokenId);
+    }
+
+    // Check added_tokens for common pad token names
+    if let Some(added) = data["added_tokens"].as_array() {
+        for token in added {
+            if let Some(content) = token["content"].as_str() {
+                match content {
+                    "[PAD]" | "<pad>" | "<|pad|>" => {
+                        return token["id"].as_u64().map(|id| id as TokenId);
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Look up a special token's ID from added_tokens or vocab.
