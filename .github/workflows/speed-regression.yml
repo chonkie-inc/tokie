@@ -30,6 +30,12 @@ jobs:
           key: hf-speed-${{ hashFiles('crates/tokie/examples/speed_regression.rs') }}
           restore-keys: hf-speed-
 
+      - name: Cache enwik8 test data
+        uses: actions/cache@v4
+        with:
+          path: benches/data/enwik8
+          key: enwik8-100mb
+
       - name: Download enwik8 test data
         run: |
           mkdir -p benches/data
