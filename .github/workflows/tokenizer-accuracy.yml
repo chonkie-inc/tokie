@@ -19,28 +19,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Cache HuggingFace models
         uses: actions/cache@v4
         with:
           path: ~/.cache/huggingface
-          key: hf-models-${{ hashFiles('scripts/test_all_tokenizers.py') }}
+          key: hf-models-${{ hashFiles('crates/tokie/tests/accuracy.rs') }}
           restore-keys: hf-models-
-
-      - name: Set up virtualenv and install dependencies
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          pip install tokenizers huggingface_hub
-
-      - name: Build tokie Python package
-        run: |
-          source .venv/bin/activate
-          pip install maturin
-          cd crates/tokie-python && maturin develop --release
 
       - name: Download enwik8 test data
         run: |
@@ -51,13 +35,4 @@ jobs:
           fi
 
       - name: Run tokenizer accuracy tests
-        run: |
-          source .venv/bin/activate
-          python scripts/test_all_tokenizers.py
-
-      - name: Upload results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: tokenizer-test-results
-          path: test_results.json
+        run: cargo test -p tokie --test accuracy --features hf -- --ignored
