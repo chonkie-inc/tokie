@@ -193,6 +193,107 @@ Loading a tokenizer from `tokenizer.json` requires JSON parsing, vocabulary cons
 
 ![Tokenizer loading time](assets/benchmark_loading.png)
 
+## Verified Tokenizers
+
+Every tokenizer below has been tested against the original HuggingFace tokenizer on 1MB of [enwik8](https://mattmahoney.net/dc/textdata.html) (~300K tokens). A **Pass** means every single token matches the HuggingFace reference output.
+
+<details>
+<summary><b>View full tokenizer accuracy table (60 models)</b></summary>
+
+### BPE (Byte-Level)
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| GPT-2 | [tokiers/gpt2](https://huggingface.co/tokiers/gpt2) | ❌ Fail |
+| cl100k (GPT-4) | [tokiers/cl100k](https://huggingface.co/tokiers/cl100k) | ✅ OK (no HF ref) |
+| o200k (GPT-4o) | [tokiers/o200k](https://huggingface.co/tokiers/o200k) | ✅ OK (no HF ref) |
+| RoBERTa | [tokiers/roberta-base](https://huggingface.co/tokiers/roberta-base) | ❌ Fail |
+| Phi-2 | [tokiers/phi-2](https://huggingface.co/tokiers/phi-2) | ❌ Fail |
+| Phi-3 Mini | [tokiers/Phi-3-mini-4k-instruct](https://huggingface.co/tokiers/Phi-3-mini-4k-instruct) | ✅ Pass |
+| ModernBERT | [tokiers/ModernBERT-base](https://huggingface.co/tokiers/ModernBERT-base) | ❌ Fail |
+| CodeLlama 7B | [tokiers/CodeLlama-7b-hf](https://huggingface.co/tokiers/CodeLlama-7b-hf) | ✅ Pass |
+| Llama 3.2 1B | [tokiers/Llama-3.2-1B](https://huggingface.co/tokiers/Llama-3.2-1B) | ❌ Fail |
+| Llama 4 Scout | [tokiers/Llama-4-Scout-17B-16E](https://huggingface.co/tokiers/Llama-4-Scout-17B-16E) | ❌ Fail |
+| Mistral 7B | [tokiers/Mistral-7B-v0.1](https://huggingface.co/tokiers/Mistral-7B-v0.1) | ✅ Pass |
+| Mistral Nemo | [tokiers/Mistral-Nemo-Base-2407](https://huggingface.co/tokiers/Mistral-Nemo-Base-2407) | ❌ Fail |
+| Mixtral 8x7B | [tokiers/Mixtral-8x7B-v0.1](https://huggingface.co/tokiers/Mixtral-8x7B-v0.1) | ✅ Pass |
+| Qwen2 7B | [tokiers/Qwen2-7B](https://huggingface.co/tokiers/Qwen2-7B) | ❌ Fail |
+| Qwen3 Embed 0.6B | [tokiers/Qwen3-Embedding-0.6B](https://huggingface.co/tokiers/Qwen3-Embedding-0.6B) | ❌ Fail |
+| Qwen3 Embed 4B | [tokiers/Qwen3-Embedding-4B](https://huggingface.co/tokiers/Qwen3-Embedding-4B) | ❌ Fail |
+| Qwen3 Embed 8B | [tokiers/Qwen3-Embedding-8B](https://huggingface.co/tokiers/Qwen3-Embedding-8B) | ❌ Fail |
+| Nomic Embed v1 | [tokiers/nomic-embed-text-v1](https://huggingface.co/tokiers/nomic-embed-text-v1) | ❌ Fail |
+
+### WordPiece (BERT-family)
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| BERT base | [tokiers/bert-base-uncased](https://huggingface.co/tokiers/bert-base-uncased) | ❌ Fail |
+| all-MiniLM-L6-v2 | [tokiers/all-MiniLM-L6-v2](https://huggingface.co/tokiers/all-MiniLM-L6-v2) | ❌ Fail |
+| all-MiniLM-L12-v2 | [tokiers/all-MiniLM-L12-v2](https://huggingface.co/tokiers/all-MiniLM-L12-v2) | ❌ Fail |
+| all-mpnet-base-v2 | [tokiers/all-mpnet-base-v2](https://huggingface.co/tokiers/all-mpnet-base-v2) | ❌ Fail |
+| BGE base en v1.5 | [tokiers/bge-base-en-v1.5](https://huggingface.co/tokiers/bge-base-en-v1.5) | ❌ Fail |
+| BGE large en v1.5 | [tokiers/bge-large-en-v1.5](https://huggingface.co/tokiers/bge-large-en-v1.5) | ❌ Fail |
+| BGE small en v1.5 | [tokiers/bge-small-en-v1.5](https://huggingface.co/tokiers/bge-small-en-v1.5) | ❌ Fail |
+| BGE en ICL | [tokiers/bge-en-icl](https://huggingface.co/tokiers/bge-en-icl) | ✅ Pass |
+| E5 base v2 | [tokiers/e5-base-v2](https://huggingface.co/tokiers/e5-base-v2) | ❌ Fail |
+| E5 large v2 | [tokiers/e5-large-v2](https://huggingface.co/tokiers/e5-large-v2) | ❌ Fail |
+| E5 small v2 | [tokiers/e5-small-v2](https://huggingface.co/tokiers/e5-small-v2) | ❌ Fail |
+| GTE base | [tokiers/gte-base](https://huggingface.co/tokiers/gte-base) | ❌ Fail |
+| GTE large | [tokiers/gte-large](https://huggingface.co/tokiers/gte-large) | ❌ Fail |
+| GTE small | [tokiers/gte-small](https://huggingface.co/tokiers/gte-small) | ❌ Fail |
+| GTE Qwen2 7B | [tokiers/gte-Qwen2-7B-instruct](https://huggingface.co/tokiers/gte-Qwen2-7B-instruct) | ❌ Fail |
+| MS MARCO MiniLM L-4 | [tokiers/ms-marco-MiniLM-L-4-v2](https://huggingface.co/tokiers/ms-marco-MiniLM-L-4-v2) | ❌ Fail |
+| MS MARCO MiniLM L-6 | [tokiers/ms-marco-MiniLM-L-6-v2](https://huggingface.co/tokiers/ms-marco-MiniLM-L-6-v2) | ❌ Fail |
+| mxbai embed large v1 | [tokiers/mxbai-embed-large-v1](https://huggingface.co/tokiers/mxbai-embed-large-v1) | ❌ Fail |
+| mxbai embed 2d large v1 | [tokiers/mxbai-embed-2d-large-v1](https://huggingface.co/tokiers/mxbai-embed-2d-large-v1) | ❌ Fail |
+| mxbai embed xsmall v1 | [tokiers/mxbai-embed-xsmall-v1](https://huggingface.co/tokiers/mxbai-embed-xsmall-v1) | ❌ Fail |
+| deepset mxbai embed de large | [tokiers/deepset-mxbai-embed-de-large-v1](https://huggingface.co/tokiers/deepset-mxbai-embed-de-large-v1) | ❌ Fail |
+
+### Jina (BPE)
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| Jina v2 base en | [tokiers/jina-embeddings-v2-base-en](https://huggingface.co/tokiers/jina-embeddings-v2-base-en) | ❌ Fail |
+| Jina v2 base code | [tokiers/jina-embeddings-v2-base-code](https://huggingface.co/tokiers/jina-embeddings-v2-base-code) | ❌ Fail |
+| Jina v3 | [tokiers/jina-embeddings-v3](https://huggingface.co/tokiers/jina-embeddings-v3) | ❌ Fail |
+| Jina v4 | [tokiers/jina-embeddings-v4](https://huggingface.co/tokiers/jina-embeddings-v4) | ❌ Fail |
+
+### Cohere (BPE)
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| Cohere embed english v3 | [tokiers/Cohere-embed-english-v3.0](https://huggingface.co/tokiers/Cohere-embed-english-v3.0) | ❌ Fail |
+| Cohere embed english light v3 | [tokiers/Cohere-embed-english-light-v3.0](https://huggingface.co/tokiers/Cohere-embed-english-light-v3.0) | ❌ Fail |
+| Cohere embed multilingual v3 | [tokiers/Cohere-embed-multilingual-v3.0](https://huggingface.co/tokiers/Cohere-embed-multilingual-v3.0) | ❌ Fail |
+| Cohere embed multilingual light v3 | [tokiers/Cohere-embed-multilingual-light-v3.0](https://huggingface.co/tokiers/Cohere-embed-multilingual-light-v3.0) | ❌ Fail |
+
+### Voyage (BPE)
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| Voyage 3 | [tokiers/voyage-3](https://huggingface.co/tokiers/voyage-3) | ⚠️ Private HF repo |
+| Voyage 3 large | [tokiers/voyage-3-large](https://huggingface.co/tokiers/voyage-3-large) | ⚠️ Private HF repo |
+| Voyage 3 lite | [tokiers/voyage-3-lite](https://huggingface.co/tokiers/voyage-3-lite) | ⚠️ Private HF repo |
+| Voyage 3.5 | [tokiers/voyage-3.5](https://huggingface.co/tokiers/voyage-3.5) | ⚠️ Private HF repo |
+| Voyage 3.5 lite | [tokiers/voyage-3.5-lite](https://huggingface.co/tokiers/voyage-3.5-lite) | ⚠️ Private HF repo |
+| Voyage Code 2 | [tokiers/voyage-code-2](https://huggingface.co/tokiers/voyage-code-2) | ⚠️ Private HF repo |
+| Voyage Code 3 | [tokiers/voyage-code-3](https://huggingface.co/tokiers/voyage-code-3) | ⚠️ Private HF repo |
+| Voyage Finance 2 | [tokiers/voyage-finance-2](https://huggingface.co/tokiers/voyage-finance-2) | ⚠️ Private HF repo |
+| Voyage Law 2 | [tokiers/voyage-law-2](https://huggingface.co/tokiers/voyage-law-2) | ⚠️ Private HF repo |
+| Voyage Multilingual 2 | [tokiers/voyage-multilingual-2](https://huggingface.co/tokiers/voyage-multilingual-2) | ⚠️ Private HF repo |
+| Voyage Multimodal 3 | [tokiers/voyage-multimodal-3](https://huggingface.co/tokiers/voyage-multimodal-3) | ⚠️ Private HF repo |
+
+### SentencePiece / Unigram
+
+| Model | tokiers/ repo | Status |
+|-------|--------------|--------|
+| T5 base | [tokiers/t5-base](https://huggingface.co/tokiers/t5-base) | ❌ Fail |
+| XLM-RoBERTa | [tokiers/xlm-roberta-base](https://huggingface.co/tokiers/xlm-roberta-base) | ❌ Fail |
+
+</details>
+
+**Summary**: 5 pass, 36 fail, 2 OK (no HF reference), 11 untestable (private Voyage repos). We're actively fixing the remaining failures — the two main patterns are CJK character handling in WordPiece and pretokenizer edge cases in BPE.
+
 ## Why tokie?
 
 When I started building [Chonkie](https://github.com/chonkie-inc/chonkie), the biggest bottleneck wasn't chunking — it was tokenization. We were spending more time counting tokens than actually chunking text.

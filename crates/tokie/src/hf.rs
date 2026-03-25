@@ -182,7 +182,7 @@ fn load_from_json_value_with_encoder(
     //
     // We check if merges are in topological order (can be processed sequentially).
     // If not, we need to use vocab-first loading where all token bytes are pre-built.
-    let num_base_tokens = 256; // Standard BPE base vocabulary size
+    let num_base_tokens = detect_num_base_tokens(vocab_map, merges_arr);
 
     if are_merges_topological(vocab_map, merges_arr, num_base_tokens) {
         load_byte_level_bpe(data, &vocab, vocab_map, merges_arr, pretokenizer_type, encoder_type, normalizer)
@@ -192,6 +192,44 @@ fn load_from_json_value_with_encoder(
         // which relies on byte-level merge rules.
         load_vocab_defined_bpe(data, &vocab, vocab_map, merges_arr, pretokenizer_type, encoder_type, normalizer)
     }
+}
+
+/// Detect the number of base tokens by finding the first merge result's vocab ID.
+///
+/// In byte-level BPE, the base tokens are all vocab entries before the first merge result.
+/// Standard GPT-2 has 256 base tokens (one per byte), but some models (e.g., ModernBERT)
+/// have fewer byte tokens or added tokens at low IDs, shifting the merge start.
+fn detect_num_base_tokens(
+    vocab_map: &serde_json::Map<String, serde_json::Value>,
+    merges_arr: &[serde_json::Value],
+) -> usize {
+    // The first merge result's vocab ID tells us where base tokens end.
+    if let Some(first_merge) = merges_arr.first() {
+        let (left_str, right_str) = if let Some(arr) = first_merge.as_array() {
+            if arr.len() >= 2 {
+                match (arr[0].as_str(), arr[1].as_str()) {
+                    (Some(l), Some(r)) => (l, r),
+                    _ => return 256,
+                }
+            } else {
+                return 256;
+            }
+        } else if let Some(s) = first_merge.as_str() {
+            let mut parts = s.split(' ');
+            match (parts.next(), parts.next()) {
+                (Some(l), Some(r)) => (l, r),
+                _ => return 256,
+            }
+        } else {
+            return 256;
+        };
+
+        let merged = format!("{}{}", left_str, right_str);
+        if let Some(id) = vocab_map.get(&merged).and_then(|v| v.as_u64()) {
+            return id as usize;
+        }
+    }
+    256 // fallback for standard GPT-2
 }
 
 /// Check if merges are in topological order (can be processed sequentially).
@@ -246,10 +284,10 @@ fn are_merges_topological(
     true
 }
 
-/// Load byte-level BPE tokenizer (GPT-2, cl100k, o200k, p50k).
+/// Load byte-level BPE tokenizer (GPT-2, cl100k, o200k, p50k, ModernBERT).
 ///
 /// These tokenizers have:
-/// - First 256 tokens are bytes 0-255 (with GPT-2's encoding for non-printable bytes)
+/// - Base tokens (byte tokens + any low-ID added tokens) before the first merge
 /// - Each merge creates the next sequential token ID
 /// - Vocab IDs match: base_tokens + merge_order
 fn load_byte_level_bpe(
@@ -261,10 +299,14 @@ fn load_byte_level_bpe(
     encoder_type: EncoderType,
     normalizer: Normalizer,
 ) -> Result<Tokenizer, JsonLoadError> {
-    // Build base tokens (first 256 are byte tokens)
+    // Detect the actual number of base tokens (may differ from 256 if added tokens
+    // occupy low IDs, e.g., ModernBERT has 245 base tokens instead of 256)
+    let num_base_tokens = detect_num_base_tokens(vocab_map, merges_arr);
+
+    // Build base tokens (byte tokens + any low-ID added/special tokens)
     let base_tokens: Vec<Vec<u8>> = vocab
         .iter()
-        .take(256)
+        .take(num_base_tokens)
         .map(|(s, _)| decode_bytelevel_token(s))
         .collect();
 
@@ -277,8 +319,8 @@ fn load_byte_level_bpe(
                 .filter_map(|t| {
                     let id = t.get("id")?.as_u64()? as u32;
                     let content = t.get("content")?.as_str()?;
-                    // Only include if in merge range (id >= 256)
-                    if id >= 256 {
+                    // Only include if after base tokens (in the merge/post-merge range)
+                    if id >= num_base_tokens as u32 {
                         Some((id, content.as_bytes().to_vec()))
                     } else {
                         None
