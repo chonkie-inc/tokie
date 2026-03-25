@@ -30,16 +30,17 @@ jobs:
           key: hf-models-${{ hashFiles('scripts/test_all_tokenizers.py') }}
           restore-keys: hf-models-
 
-      - name: Install Python dependencies
+      - name: Set up virtualenv and install dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           pip install tokenizers huggingface_hub
 
       - name: Build tokie Python package
-        uses: PyO3/maturin-action@v1
-        with:
-          command: develop
-          args: --release
-          working-directory: crates/tokie-python
+        run: |
+          source .venv/bin/activate
+          pip install maturin
+          cd crates/tokie-python && maturin develop --release
 
       - name: Download enwik8 test data
         run: |
@@ -50,7 +51,9 @@ jobs:
           fi
 
       - name: Run tokenizer accuracy tests
-        run: python scripts/test_all_tokenizers.py
+        run: |
+          source .venv/bin/activate
+          python scripts/test_all_tokenizers.py
 
       - name: Upload results
         if: always()
