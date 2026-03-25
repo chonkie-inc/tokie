@@ -198,20 +198,20 @@ Loading a tokenizer from `tokenizer.json` requires JSON parsing, vocabulary cons
 Every tokenizer below is tested against the original HuggingFace tokenizer on 1MB of [enwik8](https://mattmahoney.net/dc/textdata.html) (~300K tokens) in [CI](../../actions/workflows/tokenizer-accuracy.yml). **Pass** = every token matches.
 
 <details>
-<summary><b>View full accuracy table (60 models)</b></summary>
+<summary><b>View full accuracy table (62 models)</b></summary>
 
 | Model | Type | Status |
 |-------|------|--------|
-| [GPT-2](https://huggingface.co/tokiers/gpt2) | BPE | ❌ Fail |
-| [cl100k](https://huggingface.co/tokiers/cl100k) | BPE | ✅ OK (no HF ref) |
-| [o200k](https://huggingface.co/tokiers/o200k) | BPE | ✅ OK (no HF ref) |
-| [RoBERTa](https://huggingface.co/tokiers/roberta-base) | BPE | ❌ Fail |
+| [GPT-2](https://huggingface.co/tokiers/gpt2) | BPE | ✅ Pass |
+| [cl100k](https://huggingface.co/tokiers/cl100k) | BPE | ❌ Fail (vs tiktoken-rs) |
+| [o200k](https://huggingface.co/tokiers/o200k) | BPE | ❌ Fail (vs tiktoken-rs) |
+| [RoBERTa](https://huggingface.co/tokiers/roberta-base) | BPE | ✅ Pass |
 | [Phi-2](https://huggingface.co/tokiers/phi-2) | BPE | ❌ Fail |
 | [Phi-3 Mini](https://huggingface.co/tokiers/Phi-3-mini-4k-instruct) | BPE | ✅ Pass |
 | [ModernBERT](https://huggingface.co/tokiers/ModernBERT-base) | BPE | ❌ Fail |
 | [CodeLlama 7B](https://huggingface.co/tokiers/CodeLlama-7b-hf) | BPE | ✅ Pass |
-| [Llama 3.2 1B](https://huggingface.co/tokiers/Llama-3.2-1B) | BPE | ❌ Fail |
-| [Llama 4 Scout](https://huggingface.co/tokiers/Llama-4-Scout-17B-16E) | BPE | ❌ Fail |
+| [Llama 3.2 1B](https://huggingface.co/tokiers/Llama-3.2-1B) | BPE | ⚠️ Gated |
+| [Llama 4 Scout](https://huggingface.co/tokiers/Llama-4-Scout-17B-16E) | BPE | ⚠️ Gated |
 | [Mistral 7B](https://huggingface.co/tokiers/Mistral-7B-v0.1) | BPE | ✅ Pass |
 | [Mistral Nemo](https://huggingface.co/tokiers/Mistral-Nemo-Base-2407) | BPE | ❌ Fail |
 | [Mixtral 8x7B](https://huggingface.co/tokiers/Mixtral-8x7B-v0.1) | BPE | ✅ Pass |
@@ -240,12 +240,12 @@ Every tokenizer below is tested against the original HuggingFace tokenizer on 1M
 | [mxbai embed large v1](https://huggingface.co/tokiers/mxbai-embed-large-v1) | WordPiece | ✅ Pass |
 | [mxbai embed 2d large v1](https://huggingface.co/tokiers/mxbai-embed-2d-large-v1) | WordPiece | ✅ Pass |
 | [mxbai embed xsmall v1](https://huggingface.co/tokiers/mxbai-embed-xsmall-v1) | WordPiece | ✅ Pass |
-| [deepset mxbai embed de large](https://huggingface.co/tokiers/deepset-mxbai-embed-de-large-v1) | WordPiece | ✅ Pass |
+| [deepset mxbai embed de large](https://huggingface.co/tokiers/deepset-mxbai-embed-de-large-v1) | WordPiece | ❌ Fail |
 | [Jina v2 base en](https://huggingface.co/tokiers/jina-embeddings-v2-base-en) | BPE | ✅ Pass |
 | [Jina v2 base code](https://huggingface.co/tokiers/jina-embeddings-v2-base-code) | BPE | ❌ Fail |
 | [Jina v3](https://huggingface.co/tokiers/jina-embeddings-v3) | BPE | ❌ Fail |
 | [Jina v4](https://huggingface.co/tokiers/jina-embeddings-v4) | BPE | ❌ Fail |
-| [Cohere embed english v3](https://huggingface.co/tokiers/Cohere-embed-english-v3.0) | BPE | ❌ Fail |
+| [Cohere embed english v3](https://huggingface.co/tokiers/Cohere-embed-english-v3.0) | BPE | ✅ Pass |
 | [Cohere embed english light v3](https://huggingface.co/tokiers/Cohere-embed-english-light-v3.0) | BPE | ✅ Pass |
 | [Cohere embed multilingual v3](https://huggingface.co/tokiers/Cohere-embed-multilingual-v3.0) | BPE | ❌ Fail |
 | [Cohere embed multilingual light v3](https://huggingface.co/tokiers/Cohere-embed-multilingual-light-v3.0) | BPE | ❌ Fail |
@@ -265,7 +265,7 @@ Every tokenizer below is tested against the original HuggingFace tokenizer on 1M
 
 </details>
 
-**Summary**: 27 pass, 20 fail, 2 OK (no HF ref), 11 untestable (private Voyage repos). Actively fixing remaining failures.
+**Summary**: 29 pass, 18 fail, 2 gated (Llama), 11 untestable (private Voyage repos). Actively fixing remaining failures.
 
 ## Why tokie?
 
