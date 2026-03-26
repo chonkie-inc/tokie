@@ -34,7 +34,7 @@
 //! ];
 //! let merges = vec![(0, 1)]; // a + b -> ab
 //!
-//! let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2);
+//! let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2, &Default::default());
 //! assert_eq!(encoder.encode(b"ab"), vec![2]);
 //! ```
 
@@ -446,12 +446,13 @@ impl SentencePieceBPE {
     /// ];
     /// let merges = vec![(0, 1)]; // a + b -> ab
     ///
-    /// let (encoder, token_bytes) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2);
+    /// let (encoder, token_bytes) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2, &Default::default());
     /// ```
     pub fn from_vocab_and_merges(
         vocab: &[(u32, Vec<u8>)],
         merges: &[(TokenId, TokenId)],
         num_base_tokens: usize,
+        byte_fallback_ids: &foldhash::HashSet<u32>,
     ) -> (Self, Vec<Vec<u8>>) {
         let token_bytes: Vec<Vec<u8>> = vocab.iter().map(|(_, bytes)| bytes.clone()).collect();
 
@@ -477,27 +478,34 @@ impl SentencePieceBPE {
         }
 
         // Build single-byte lookup table.
-        // Use last-wins so real character tokens (which appear after byte fallback
-        // tokens like <0xXX> in models like Gemma) take precedence.
+        // Prefer non-byte-fallback tokens over byte-fallback tokens (<0xNN>).
+        // In Gemma: real \n (id 108) preferred over <0x0A> (id 227).
+        // In NV-Embed: real 'e' (id 28706) preferred over <0x65> (id 104).
         let mut byte_lut = [u32::MAX; 256];
+        let mut byte_lut_is_fallback = [true; 256];
         for (id, bytes) in vocab {
             if bytes.len() == 1 {
-                byte_lut[bytes[0] as usize] = *id;
+                let byte_val = bytes[0] as usize;
+                let is_fallback = byte_fallback_ids.contains(id);
+                if byte_lut[byte_val] == u32::MAX
+                    || (!is_fallback && byte_lut_is_fallback[byte_val])
+                {
+                    byte_lut[byte_val] = *id;
+                    byte_lut_is_fallback[byte_val] = is_fallback;
+                }
             }
         }
 
         let token_lengths: Vec<u16> = token_bytes.iter().map(|b| b.len() as u16).collect();
 
         // Build token_cache: maps bytes -> token ID.
-        // For single-byte entries, use byte_lut (first-wins from vocab order) to ensure
-        // consistent behavior. This prevents byte fallback tokens like <0x0A> (which also
-        // map to [0x0A]) from overwriting the real "\n" token in models like Gemma.
+        // For single-byte entries, use byte_lut which correctly prefers
+        // non-byte-fallback tokens.
         let mut token_cache: FoldHashMap<Vec<u8>, TokenId> = vocab
             .iter()
             .filter(|(_, bytes)| bytes.len() > 1)
             .map(|(id, bytes)| (bytes.clone(), *id))
             .collect();
-        // Add single-byte entries from byte_lut (which has first-wins behavior)
         for (byte_val, &token_id) in byte_lut.iter().enumerate() {
             if token_id != u32::MAX {
                 token_cache.insert(vec![byte_val as u8], token_id);
@@ -894,7 +902,7 @@ mod tests {
         ];
         let merges = vec![(0, 1)];
 
-        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2);
+        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2, &Default::default());
 
         assert_eq!(encoder.encode(b"ab"), vec![2]);
         assert_eq!(encoder.encode(b"a"), vec![0]);
@@ -917,7 +925,7 @@ mod tests {
             (1, 2), // b + c -> bc (rank 2)
         ];
 
-        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 3);
+        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 3, &Default::default());
 
         assert_eq!(encoder.encode(b"abc"), vec![5]);
     }
@@ -931,7 +939,7 @@ mod tests {
         ];
         let merges = vec![(0, 1)];
 
-        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2);
+        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2, &Default::default());
 
         assert_eq!(encoder.encode("▁H".as_bytes()), vec![2]);
         assert_eq!(encoder.encode("▁".as_bytes()), vec![0]);
@@ -977,7 +985,7 @@ mod tests {
         ];
         let merges = vec![(0, 1)];
 
-        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2);
+        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 2, &Default::default());
         let mut state = EncodeState::new();
 
         assert_eq!(encoder.encode_with_state(b"ab", &mut state), &[2]);
@@ -1005,7 +1013,7 @@ mod tests {
             (4, 2), // ▁a + b -> ▁ab
         ];
 
-        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 4);
+        let (encoder, _) = SentencePieceBPE::from_vocab_and_merges(&vocab, &merges, 4, &Default::default());
         let mut state = EncodeState::new();
 
         let text = "▁ab▁ab▁ab".as_bytes();

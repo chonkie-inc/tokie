@@ -379,12 +379,14 @@ fn load_vocab_defined_bpe(
     let uses_bytelevel = is_bytelevel_decoder(data);
 
     // Build full vocab with proper byte handling
+    let mut byte_fallback_ids = foldhash::HashSet::default();
     let full_vocab: Vec<(u32, Vec<u8>)> = vocab
         .iter()
         .map(|(s, id)| {
             let bytes = if uses_bytelevel {
                 decode_bytelevel_token(s)
             } else if let Some(byte_val) = parse_byte_fallback_token(s) {
+                byte_fallback_ids.insert(*id);
                 vec![byte_val]
             } else {
                 decode_sentencepiece_token(s)
@@ -437,7 +439,7 @@ fn load_vocab_defined_bpe(
     let (encoder, token_bytes) = if use_sentencepiece {
         // SentencePiece encoder with radix heap
         let (enc, bytes) =
-            SentencePieceBPE::from_vocab_and_merges(&full_vocab, &merges, num_base_tokens);
+            SentencePieceBPE::from_vocab_and_merges(&full_vocab, &merges, num_base_tokens, &byte_fallback_ids);
         (Encoder::SentencePiece(enc), bytes)
     } else if use_simple || encoder_type == EncoderType::Simple {
         // Simple encoder for ByteLevel vocab-defined BPE or explicit request

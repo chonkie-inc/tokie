@@ -547,8 +547,22 @@ impl Tokenizer {
             }
             EncoderType::SentencePiece => {
                 // OPTIMIZED: Build lookups directly from decoder (single copy)
-                let (byte_lut, token_cache, token_lengths) = build_token_lookups(&decoder_offsets, &decoder_data, vocab_size);
+                let (mut byte_lut, mut token_cache, token_lengths) = build_token_lookups(&decoder_offsets, &decoder_data, vocab_size);
                 let merges = deserialize_merges(merge_data)?;
+
+                // Fix byte_lut/token_cache for byte-fallback collisions.
+                // In models like Gemma, both a byte-fallback token (e.g., <0x3C> = id 277)
+                // and a real character token (e.g., '<' = id 235322) map to the same byte.
+                // Merge rules reference the real token, so we detect which single-byte tokens
+                // appear in merges and prefer those.
+                fix_byte_fallback_collisions(
+                    &mut byte_lut,
+                    &mut token_cache,
+                    &merges,
+                    &decoder_offsets,
+                    &decoder_data,
+                    vocab_size,
+                );
 
                 let enc = SentencePieceBPE::from_parts(
                     &merges,
@@ -650,18 +664,139 @@ fn build_token_lookups(
         // Token length
         token_lengths.push(len as u16);
 
-        // Single-byte lookup
+        // Single-byte lookup (first-wins: prefer lower token ID, which is
+        // typically the non-byte-fallback token in SentencePiece models)
         if len == 1 && byte_lut[bytes[0] as usize] == u32::MAX {
             byte_lut[bytes[0] as usize] = i as TokenId;
         }
 
         // Short token lookup (single copy into HashMap)
+        // For single-byte tokens, use entry() to match byte_lut's first-wins
+        // behavior. This prevents byte fallback tokens (e.g., <0x0A> = id 227)
+        // from overwriting real tokens (e.g., \n = id 108) in models like Gemma.
         if len <= MAX_CACHED_TOKEN_LEN {
-            token_cache.insert(bytes.to_vec(), i as TokenId);
+            if len == 1 {
+                token_cache.entry(bytes.to_vec()).or_insert(i as TokenId);
+            } else {
+                token_cache.insert(bytes.to_vec(), i as TokenId);
+            }
         }
     }
 
     (byte_lut, token_cache, token_lengths)
+}
+
+/// Fix byte_lut and token_cache for SentencePiece models with byte-fallback collisions.
+///
+/// In models like Gemma, multiple tokens can map to the same single byte:
+/// - A byte-fallback token like `<0x3C>` (id 277, byte 0x3C)
+/// - A real character token like `<` (id 235322, also byte 0x3C)
+///
+/// Merge rules reference the real token, not the byte-fallback. If byte_lut returns
+/// the byte-fallback ID, merges won't fire and encoding degrades to byte-level output.
+///
+/// Detection strategy:
+/// 1. Find tokens that appear in merge rules (merge operands) — these are "real" tokens
+/// 2. For any byte with a collision, prefer the merge-operand token
+/// 3. For bytes where neither token is a merge operand (e.g., digits in Gemma),
+///    detect the byte-fallback range and prefer the non-fallback token
+fn fix_byte_fallback_collisions(
+    byte_lut: &mut [TokenId; 256],
+    token_cache: &mut FoldHashMap<Vec<u8>, TokenId>,
+    merges: &[(TokenId, TokenId, TokenId)],
+    decoder_offsets: &[u32],
+    decoder_data: &[u8],
+    vocab_size: usize,
+) {
+    // Collect all single-byte tokens grouped by byte value
+    let mut byte_tokens: [Vec<TokenId>; 256] = std::array::from_fn(|_| Vec::new());
+    for i in 0..vocab_size {
+        let start = decoder_offsets[i] as usize;
+        let end = decoder_offsets[i + 1] as usize;
+        if end - start == 1 {
+            let byte_val = decoder_data[start] as usize;
+            byte_tokens[byte_val].push(i as TokenId);
+        }
+    }
+
+    // Check if there are any collisions at all
+    let has_collisions = byte_tokens.iter().any(|ids| ids.len() > 1);
+    if !has_collisions {
+        return;
+    }
+
+    // Detect byte-fallback range: find a set of ~256 single-byte tokens that
+    // collectively cover a wide range of byte values and form a roughly contiguous ID range.
+    // Strategy: collect all single-byte token IDs, find the densest cluster of ~256 tokens.
+    let mut all_single_byte: Vec<(TokenId, u8)> = Vec::new(); // (token_id, byte_value)
+    for (byte_val, ids) in byte_tokens.iter().enumerate() {
+        for &id in ids {
+            all_single_byte.push((id, byte_val as u8));
+        }
+    }
+    all_single_byte.sort_by_key(|(id, _)| *id);
+
+    // Find the byte-fallback range: a window of IDs where ~256 single-byte tokens are clustered
+    let mut fallback_ids = foldhash::HashSet::default();
+    if all_single_byte.len() >= 256 {
+        // Try to find a contiguous-ish range of ~256 tokens
+        let mut best_start = 0;
+        let mut best_density = 0usize;
+        for start_idx in 0..all_single_byte.len().saturating_sub(200) {
+            let start_id = all_single_byte[start_idx].0;
+            // Count how many tokens fall within a range of 300 IDs from start
+            let count = all_single_byte[start_idx..]
+                .iter()
+                .take_while(|(id, _)| *id < start_id + 300)
+                .count();
+            if count > best_density && count >= 200 {
+                best_density = count;
+                best_start = start_idx;
+            }
+        }
+
+        if best_density >= 200 {
+            let range_start_id = all_single_byte[best_start].0;
+            for &(id, _) in &all_single_byte[best_start..] {
+                if id < range_start_id + 300 {
+                    fallback_ids.insert(id);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Also collect merge operands for tie-breaking
+    let mut merge_operands = foldhash::HashSet::default();
+    for &(left, right, _) in merges {
+        merge_operands.insert(left);
+        merge_operands.insert(right);
+    }
+
+    // For each byte with multiple tokens, pick the best one
+    for (byte_val, ids) in byte_tokens.iter().enumerate() {
+        if ids.len() <= 1 {
+            continue;
+        }
+
+        // Priority: merge operand > non-fallback > fallback
+        let mut best = byte_lut[byte_val];
+        for &id in ids {
+            if merge_operands.contains(&id) && !merge_operands.contains(&best) {
+                best = id;
+            } else if !fallback_ids.contains(&id) && fallback_ids.contains(&best)
+                && !merge_operands.contains(&best)
+            {
+                best = id;
+            }
+        }
+
+        if best != byte_lut[byte_val] {
+            byte_lut[byte_val] = best;
+            token_cache.insert(vec![byte_val as u8], best);
+        }
+    }
 }
 
 /// Deserialize the decoder's flat buffer.
