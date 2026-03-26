@@ -105,6 +105,18 @@ pub struct Pretok {
     pub newline_lookahead: bool,
     /// Whether whitespace runs anchor on the last newline: `\s*[\r\n]+` (CL100K/Llama/Qwen: true).
     pub newline_anchored_whitespace: bool,
+    /// Whether combining marks (\p{M}) are scanned as part of letter runs (DeepSeek: true).
+    pub include_marks_in_letters: bool,
+    /// Whether to skip whitespace backtracking before digits (DeepSeek: true).
+    /// In multi-stage pretokenizers, digit groups are extracted first, so whitespace
+    /// before digits should be consumed greedily rather than leaving one space for
+    /// the next token's prefix.
+    pub no_backtrack_before_digit: bool,
+    /// Whether punct prefix only matches ASCII letters (DeepSeek: true).
+    /// When true, `[punct][A-Za-z]+` only scans ASCII letters after punctuation,
+    /// stopping at non-ASCII letters like `ë`. When false, `\p{L}+` scans all
+    /// Unicode letters after any prefix.
+    pub punct_prefix_ascii_only: bool,
 }
 
 impl Pretok {
@@ -131,6 +143,9 @@ impl Pretok {
         add_prefix_space: true,
         newline_lookahead: true,
         newline_anchored_whitespace: false,
+        include_marks_in_letters: false,
+        no_backtrack_before_digit: false,
+        punct_prefix_ascii_only: false,
     };
 
     /// CL100K compatible configuration.
@@ -156,6 +171,9 @@ impl Pretok {
         add_prefix_space: false,
         newline_lookahead: false,
         newline_anchored_whitespace: true,
+        include_marks_in_letters: false,
+        no_backtrack_before_digit: false,
+        punct_prefix_ascii_only: false,
     };
 
     /// O200K compatible configuration.
@@ -181,6 +199,9 @@ impl Pretok {
         add_prefix_space: false,
         newline_lookahead: false,
         newline_anchored_whitespace: true,
+        include_marks_in_letters: false,
+        no_backtrack_before_digit: false,
+        punct_prefix_ascii_only: false,
     };
 
     /// Voyage compatible configuration.
@@ -211,6 +232,41 @@ impl Pretok {
         add_prefix_space: false,
         newline_lookahead: false,
         newline_anchored_whitespace: true,
+        include_marks_in_letters: false,
+        no_backtrack_before_digit: false,
+        punct_prefix_ascii_only: false,
+    };
+
+    /// DeepSeek compatible configuration.
+    ///
+    /// Used by: DeepSeek-V3, DeepSeek-R1
+    ///
+    /// Similar to CL100K but includes combining marks in letter runs:
+    /// - `[\p{L}\p{M}]+` instead of `\p{L}+` (Thai, Arabic combining marks stay with letters)
+    /// - No contractions
+    pub const DEEPSEEK: Self = Self {
+        // Letter handling
+        letter_prefix: LetterPrefix::NonNewlineNonAlnum,
+        letter_scanning: LetterScanning::Simple,
+        // Contraction handling
+        contraction_position: ContractionPosition::Standalone,
+        case_insensitive_contractions: true,
+        // Number handling
+        max_number_digits: 3,
+        space_prefix_numbers: false,
+        keep_alphanumeric_together: false,
+        // Punctuation handling
+        individual_punctuation: false,
+        punct_trailing_newlines: true,
+        punct_trailing_slash: false,
+        // Whitespace handling
+        include_leading_space: true,
+        add_prefix_space: false,
+        newline_lookahead: false,
+        newline_anchored_whitespace: true,
+        include_marks_in_letters: true,
+        no_backtrack_before_digit: true,
+        punct_prefix_ascii_only: true,
     };
 
     /// BERT compatible configuration.
@@ -242,6 +298,9 @@ impl Pretok {
         add_prefix_space: false,
         newline_lookahead: false,
         newline_anchored_whitespace: false,
+        include_marks_in_letters: false,
+        no_backtrack_before_digit: false,
+        punct_prefix_ascii_only: false,
     };
 
     /// Split text into pre-tokens.
@@ -402,6 +461,16 @@ fn is_unicode_letter(c: char) -> bool {
             | GeneralCategory::TitlecaseLetter
             | GeneralCategory::ModifierLetter
             | GeneralCategory::OtherLetter
+    )
+}
+
+#[inline]
+fn is_unicode_mark(c: char) -> bool {
+    matches!(
+        get_general_category(c),
+        GeneralCategory::NonspacingMark
+            | GeneralCategory::SpacingMark
+            | GeneralCategory::EnclosingMark
     )
 }
 
@@ -608,13 +677,40 @@ impl PretokIter<'_> {
         }
     }
 
-    /// Simple letter scanning: `\p{L}+`
+    /// Try to scan prefix + ASCII letters only: `[prefix][A-Za-z]+`
+    /// Used by DeepSeek where punct prefix only groups with ASCII letters.
+    #[inline]
+    fn try_scan_prefix_ascii_letters(&mut self, prefix_len: usize) -> bool {
+        if self.pos + prefix_len >= self.len {
+            return false;
+        }
+        let next_b = unsafe { *self.bytes.get_unchecked(self.pos + prefix_len) };
+        if is_ascii_letter(next_b) {
+            self.pos += prefix_len + 1;
+            // Scan only ASCII letters
+            while self.pos < self.len {
+                let b = unsafe { *self.bytes.get_unchecked(self.pos) };
+                if is_ascii_letter(b) {
+                    self.pos += 1;
+                } else {
+                    break;
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Simple letter scanning: `\p{L}+` or `[\p{L}\p{M}]+`
     /// In BERT mode, stops at CJK and punctuation but continues through marks.
+    /// When `include_marks_in_letters` is true, also continues through combining marks.
     #[inline]
     fn scan_letters_simple(&mut self) {
         let bytes = self.bytes;
         let len = self.len;
         let bert_mode = self.config.individual_punctuation;
+        let include_marks = self.config.include_marks_in_letters;
 
         while self.pos < len {
             let b = unsafe { *bytes.get_unchecked(self.pos) };
@@ -634,6 +730,8 @@ impl PretokIter<'_> {
                         _ => return,
                     }
                 } else if is_unicode_letter(c) {
+                    self.pos += char_len;
+                } else if include_marks && is_unicode_mark(c) {
                     self.pos += char_len;
                 } else {
                     return;
@@ -1028,15 +1126,26 @@ impl PretokIter<'_> {
                     c.is_whitespace()
                 });
             if !is_next_ws {
-                // Back up by one character (not one byte) — find the start of the
-                // last character in the consumed whitespace run.
-                let mut back = self.pos - 1;
-                while back > start && (unsafe { *bytes.get_unchecked(back) } & 0xC0) == 0x80 {
-                    back -= 1; // skip UTF-8 continuation bytes
-                }
-                // Only back up if we'd still have at least one character
-                if back > start {
-                    self.pos = back;
+                // In multi-stage pretokenizers (DeepSeek), digits are extracted first,
+                // so whitespace before digits should be kept together, not backtracked.
+                let skip_backtrack = self.config.no_backtrack_before_digit
+                    && (next_b.is_ascii_digit()
+                        || (next_b >= 0x80 && {
+                            let (c, _) = decode_utf8(unsafe { bytes.get_unchecked(self.pos..) });
+                            is_unicode_number(c)
+                        }));
+
+                if !skip_backtrack {
+                    // Back up by one character (not one byte) — find the start of the
+                    // last character in the consumed whitespace run.
+                    let mut back = self.pos - 1;
+                    while back > start && (unsafe { *bytes.get_unchecked(back) } & 0xC0) == 0x80 {
+                        back -= 1; // skip UTF-8 continuation bytes
+                    }
+                    // Only back up if we'd still have at least one character
+                    if back > start {
+                        self.pos = back;
+                    }
                 }
             }
         }
@@ -1135,10 +1244,15 @@ impl PretokIter<'_> {
     #[inline]
     fn handle_other(&mut self, _start: usize) {
         // Check if this can be a prefix for letters (CL100K/O200K style)
-        if self.config.letter_prefix == LetterPrefix::NonNewlineNonAlnum
-            && self.try_scan_prefix_letters(1)
-        {
-            return;
+        if self.config.letter_prefix == LetterPrefix::NonNewlineNonAlnum {
+            if self.config.punct_prefix_ascii_only {
+                // DeepSeek: [punct][A-Za-z]+ — only ASCII letters after punct
+                if self.try_scan_prefix_ascii_letters(1) {
+                    return;
+                }
+            } else if self.try_scan_prefix_letters(1) {
+                return;
+            }
         }
         // Just punctuation
         self.pos += 1;

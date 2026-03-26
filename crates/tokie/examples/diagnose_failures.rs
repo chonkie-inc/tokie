@@ -87,6 +87,7 @@ fn main() {
     println!("Loaded {} bytes of enwik8\n", text.len());
 
     let models: Vec<(&str, &str, &str)> = vec![
+        ("DeepSeek-V3", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-V3"),
         ("GPT-2", "tokiers/gpt2", "openai-community/gpt2"),
         ("RoBERTa", "tokiers/roberta-base", "FacebookAI/roberta-base"),
         ("Phi-2", "tokiers/phi-2", "microsoft/phi-2"),

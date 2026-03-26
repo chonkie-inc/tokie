@@ -37,6 +37,7 @@ pub enum PretokType {
     O200k = 3,
     Bert = 4,
     Voyage = 5,
+    DeepSeek = 6,
 }
 
 impl PretokType {
@@ -49,6 +50,7 @@ impl PretokType {
             PretokType::O200k => Some(Pretok::O200K),
             PretokType::Bert => Some(Pretok::BERT),
             PretokType::Voyage => Some(Pretok::VOYAGE),
+            PretokType::DeepSeek => Some(Pretok::DEEPSEEK),
         }
     }
 }

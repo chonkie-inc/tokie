@@ -512,6 +512,11 @@ fn detect_pretokenizer_type(data: &serde_json::Value) -> PretokType {
                                     return PretokType::O200k;
                                 }
 
+                                // DeepSeek uses [\p{L}\p{M}]+ to include combining marks
+                                if pattern.contains("[\\p{L}\\p{M}]+") {
+                                    return PretokType::DeepSeek;
+                                }
+
                                 // Simple \p{L}+ pattern = CL100K style (no CamelCase split)
                                 // This includes Llama 3, Qwen, and similar models
                                 if pattern.contains("\\p{L}+") || pattern.contains("(?i:'s|'t|'re") {
@@ -570,13 +575,10 @@ fn detect_normalizer(data: &serde_json::Value) -> Normalizer {
     if let Some(typ) = normalizer["type"].as_str() {
         match typ {
             "Precompiled" => {
-                // Precompiled with WhitespaceSplit + Metaspace = SentencePiece
-                if has_metaspace && has_whitespace_split {
-                    return Normalizer::SentencePiece;
-                }
-                // Precompiled without WhitespaceSplit - just use Metaspace
+                // Precompiled charsmap = SentencePiece normalization (NFKC + whitespace collapse)
+                // Models: T5 (with WhitespaceSplit), bge-m3 (without WhitespaceSplit)
                 if has_metaspace {
-                    return Normalizer::Metaspace;
+                    return Normalizer::SentencePiece;
                 }
             }
             "BertNormalizer" => {
@@ -618,8 +620,9 @@ fn detect_normalizer(data: &serde_json::Value) -> Normalizer {
                         return Normalizer::SentencePieceLowercase;
                     }
 
-                    // General SentencePiece: Sequence with Precompiled + WhitespaceSplit + Metaspace
-                    if has_precompiled && has_metaspace && has_whitespace_split {
+                    // General SentencePiece: Sequence with Precompiled + Metaspace
+                    // (with or without WhitespaceSplit — bge-m3 omits it)
+                    if has_precompiled && has_metaspace {
                         return Normalizer::SentencePiece;
                     }
 
@@ -1087,9 +1090,13 @@ fn extract_added_tokens(data: &serde_json::Value) -> Vec<(TokenId, Vec<u8>)> {
         }
         let id = token["id"].as_u64()? as TokenId;
         let content = token["content"].as_str()?;
-        // Only include tokens that contain whitespace patterns (spaces, tabs)
-        // to avoid interfering with regular vocab tokens
-        if content.len() >= 2 && content.bytes().all(|b| b == b' ' || b == b'\t') {
+        // Include added tokens that need pre-splitting:
+        // 1. Multi-char whitespace patterns (spaces, tabs) like "   " or "\t\t"
+        // 2. Control char sequences like "\n", "\n\n", etc. (Gemma has \n through
+        //    \n×20 as added tokens that must be matched before BPE encoding)
+        let all_whitespace_or_control = !content.is_empty()
+            && content.bytes().all(|b| b == b' ' || b == b'\t' || b < 0x20);
+        if all_whitespace_or_control {
             Some((id, content.as_bytes().to_vec()))
         } else {
             None

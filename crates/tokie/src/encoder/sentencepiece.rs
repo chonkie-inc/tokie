@@ -476,23 +476,33 @@ impl SentencePieceBPE {
             }
         }
 
-        // Build single-byte fallback table
+        // Build single-byte lookup table.
+        // Use last-wins so real character tokens (which appear after byte fallback
+        // tokens like <0xXX> in models like Gemma) take precedence.
         let mut byte_lut = [u32::MAX; 256];
         for (id, bytes) in vocab {
             if bytes.len() == 1 {
-                let byte_val = bytes[0] as usize;
-                if byte_lut[byte_val] == u32::MAX {
-                    byte_lut[byte_val] = *id;
-                }
+                byte_lut[bytes[0] as usize] = *id;
             }
         }
 
         let token_lengths: Vec<u16> = token_bytes.iter().map(|b| b.len() as u16).collect();
 
-        let token_cache: FoldHashMap<Vec<u8>, TokenId> = vocab
+        // Build token_cache: maps bytes -> token ID.
+        // For single-byte entries, use byte_lut (first-wins from vocab order) to ensure
+        // consistent behavior. This prevents byte fallback tokens like <0x0A> (which also
+        // map to [0x0A]) from overwriting the real "\n" token in models like Gemma.
+        let mut token_cache: FoldHashMap<Vec<u8>, TokenId> = vocab
             .iter()
+            .filter(|(_, bytes)| bytes.len() > 1)
             .map(|(id, bytes)| (bytes.clone(), *id))
             .collect();
+        // Add single-byte entries from byte_lut (which has first-wins behavior)
+        for (byte_val, &token_id) in byte_lut.iter().enumerate() {
+            if token_id != u32::MAX {
+                token_cache.insert(vec![byte_val as u8], token_id);
+            }
+        }
 
         let encoder = Self {
             pair_lookup,

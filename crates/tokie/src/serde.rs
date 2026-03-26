@@ -57,6 +57,7 @@ impl PretokType {
             3 => Some(Self::O200k),
             4 => Some(Self::Bert),
             5 => Some(Self::Voyage),
+            6 => Some(Self::DeepSeek),
             _ => None,
         }
     }
