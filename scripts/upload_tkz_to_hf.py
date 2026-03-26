@@ -82,6 +82,16 @@ TKZ_TO_REPO = {
     "qwen2": "Qwen2-7B",
     "t5": "t5-base",
     "xlm_roberta": "xlm-roberta-base",
+    # New models
+    "DeepSeek-V3": "DeepSeek-V3",
+    "DeepSeek-R1": "DeepSeek-R1",
+    "gemma-2-2b": "gemma-2-2b",
+    "gemma-3-4b-it": "gemma-3-4b-it",
+    "bge-m3": "bge-m3",
+    "snowflake-arctic-embed-l-v2.0": "snowflake-arctic-embed-l-v2.0",
+    "NV-Embed-v2": "NV-Embed-v2",
+    "SmolLM2-135M": "SmolLM2-135M",
+    "stablelm-2-1_6b": "stablelm-2-1_6b",
 }
 
 MODELS_DIR = "models"

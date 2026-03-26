@@ -78,6 +78,16 @@ fn main() {
         ("mixedbread-ai/mxbai-embed-xsmall-v1", "mxbai-embed-xsmall-v1"),
         ("mixedbread-ai/deepset-mxbai-embed-de-large-v1", "deepset-mxbai-embed-de-large-v1"),
         ("nomic-ai/nomic-embed-text-v1", "nomic-embed-text-v1"),
+        // New models (DeepSeek, Gemma, etc.)
+        ("deepseek-ai/DeepSeek-V3", "DeepSeek-V3"),
+        ("deepseek-ai/DeepSeek-R1", "DeepSeek-R1"),
+        ("google/gemma-2-2b", "gemma-2-2b"),
+        ("google/gemma-3-4b-it", "gemma-3-4b-it"),
+        ("BAAI/bge-m3", "bge-m3"),
+        ("Snowflake/snowflake-arctic-embed-l-v2.0", "snowflake-arctic-embed-l-v2.0"),
+        ("nvidia/NV-Embed-v2", "NV-Embed-v2"),
+        ("HuggingFaceTB/SmolLM2-135M", "SmolLM2-135M"),
+        ("stabilityai/stablelm-2-1_6b", "stablelm-2-1_6b"),
     ];
 
     std::fs::create_dir_all("models").unwrap();

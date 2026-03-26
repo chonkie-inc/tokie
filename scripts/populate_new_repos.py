@@ -50,6 +50,16 @@ NEW_REPOS = {
     # T5 / XLM-R
     "t5-base": "google-t5/t5-base",
     "xlm-roberta-base": "FacebookAI/xlm-roberta-base",
+    # New models
+    "DeepSeek-V3": "deepseek-ai/DeepSeek-V3",
+    "DeepSeek-R1": "deepseek-ai/DeepSeek-R1",
+    "gemma-2-2b": "google/gemma-2-2b",
+    "gemma-3-4b-it": "google/gemma-3-4b-it",
+    "bge-m3": "BAAI/bge-m3",
+    "snowflake-arctic-embed-l-v2.0": "Snowflake/snowflake-arctic-embed-l-v2.0",
+    "NV-Embed-v2": "nvidia/NV-Embed-v2",
+    "SmolLM2-135M": "HuggingFaceTB/SmolLM2-135M",
+    "stablelm-2-1_6b": "stabilityai/stablelm-2-1_6b",
 }
 
 # Files to try downloading from the original repo

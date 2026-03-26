@@ -135,6 +135,17 @@ accuracy_test!(voyage_multimodal_3,     "tokiers/voyage-multimodal-3",     "voya
 accuracy_test!(t5_base,                 "tokiers/t5-base",              "google-t5/t5-base");
 accuracy_test!(xlm_roberta_base,        "tokiers/xlm-roberta-base",     "FacebookAI/xlm-roberta-base");
 
+// New models
+accuracy_test!(deepseek_v3,             "tokiers/DeepSeek-V3",                      "deepseek-ai/DeepSeek-V3");
+accuracy_test!(deepseek_r1,             "tokiers/DeepSeek-R1",                      "deepseek-ai/DeepSeek-R1");
+accuracy_test!(gemma_2_2b,              "tokiers/gemma-2-2b",                       "google/gemma-2-2b");
+accuracy_test!(gemma_3_4b_it,           "tokiers/gemma-3-4b-it",                    "google/gemma-3-4b-it");
+accuracy_test!(bge_m3,                  "tokiers/bge-m3",                           "BAAI/bge-m3");
+accuracy_test!(snowflake_arctic_v2,     "tokiers/snowflake-arctic-embed-l-v2.0",    "Snowflake/snowflake-arctic-embed-l-v2.0");
+accuracy_test!(nv_embed_v2,             "tokiers/NV-Embed-v2",                      "nvidia/NV-Embed-v2");
+accuracy_test!(smollm2_135m,            "tokiers/SmolLM2-135M",                     "HuggingFaceTB/SmolLM2-135M");
+accuracy_test!(stablelm_2_1_6b,         "tokiers/stablelm-2-1_6b",                  "stabilityai/stablelm-2-1_6b");
+
 // ============================================================================
 // tiktoken models (CL100K, O200K) — compared against tiktoken-rs
 // ============================================================================
