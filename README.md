@@ -41,7 +41,7 @@ pip install tokie
 
 ```toml
 [dependencies]
-tokie = { version = "0.0.6", features = ["hf"] }
+tokie = { version = "0.0.7", features = ["hf"] }
 ```
 
 ## Quick Start
