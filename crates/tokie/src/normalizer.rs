@@ -328,32 +328,64 @@ fn collapse_and_strip_whitespace(text: &str) -> String {
     result
 }
 
-/// Collapse whitespace, strip leading/trailing, and remove control characters.
+/// Collapse whitespace, strip leading/trailing, and handle control/format characters.
 ///
-/// This is like `collapse_and_strip_whitespace` but also removes:
-/// - BOM (U+FEFF)
-/// - Null bytes (U+0000)
-/// - Replacement character (U+FFFD)
-/// - Other control/format characters
+/// Matches SentencePiece's Precompiled charsmap behavior:
+/// - Control chars (Cc category, except tab/newline/CR): **removed**
+/// - Format chars (Cf category: ZWNJ, ZWJ, directional marks, BOM): **mapped to space**
+/// - Replacement char (U+FFFD): **mapped to space**
+/// - Whitespace: collapsed to single space, stripped from edges
+///
+/// The key difference from stripping format chars: ZWNJ (U+200C) between
+/// non-space chars becomes a space, creating a word boundary that affects
+/// tokenization (e.g., Persian "دولت‌زدائی" → "دولت زدائی").
 fn collapse_strip_whitespace_and_controls(text: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let mut prev_was_space = true; // Start true to strip leading whitespace
 
     for c in text.chars() {
-        // Skip control characters
-        if is_control(c) || c == '\0' || c == '\u{FFFD}' {
+        if c == '\0' {
             continue;
         }
 
-        if c.is_whitespace() {
-            if !prev_was_space {
-                result.push(' ');
-                prev_was_space = true;
+        // Classify the character
+        let cat = get_general_category(c);
+        match cat {
+            // Control chars (Cc): tab/newline/CR → space, others → removed
+            GeneralCategory::Control => {
+                if c == '\t' || c == '\n' || c == '\r' || c == '\x0C' {
+                    // Map to space (whitespace collapsing)
+                    if !prev_was_space {
+                        result.push(' ');
+                        prev_was_space = true;
+                    }
+                }
+                // Other control chars: silently removed
             }
-            // Skip if prev was already space (collapse)
-        } else {
-            result.push(c);
-            prev_was_space = false;
+            // Format chars (Cf): ZWNJ, ZWJ, directional marks, BOM → space
+            GeneralCategory::Format => {
+                if !prev_was_space {
+                    result.push(' ');
+                    prev_was_space = true;
+                }
+            }
+            _ => {
+                // Replacement char → space (matching charsmap)
+                if c == '\u{FFFD}' {
+                    if !prev_was_space {
+                        result.push(' ');
+                        prev_was_space = true;
+                    }
+                } else if c.is_whitespace() {
+                    if !prev_was_space {
+                        result.push(' ');
+                        prev_was_space = true;
+                    }
+                } else {
+                    result.push(c);
+                    prev_was_space = false;
+                }
+            }
         }
     }
 

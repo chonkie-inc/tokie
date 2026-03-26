@@ -20,10 +20,13 @@ fn diagnose(name: &str, tokiers_repo: &str, hf_model: &str, text: &str) {
         Ok(t) => t,
         Err(e) => { println!("[{name}] tokie load FAILED: {e}"); return; }
     };
-    let hf = match HfTokenizer::from_pretrained(hf_model, None) {
+    let mut hf = match HfTokenizer::from_pretrained(hf_model, None) {
         Ok(t) => t,
         Err(e) => { println!("[{name}] HF load FAILED: {e}"); return; }
     };
+    // Disable HF truncation so we compare full outputs (some models like Cohere
+    // have truncation.max_length in tokenizer.json which truncates during encode)
+    let _ = hf.with_truncation(None);
 
     let tokie_enc = tok.encode(text, false);
     let tokie_ids = &tokie_enc.ids;

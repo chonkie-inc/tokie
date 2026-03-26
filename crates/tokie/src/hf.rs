@@ -356,6 +356,7 @@ fn load_byte_level_bpe(
     if let Some(pad_id) = extract_pad_token_id(data) {
         tokenizer.set_pad_token_id(pad_id);
     }
+    setup_added_tokens(&mut tokenizer, data);
     Ok(tokenizer)
 }
 
@@ -456,6 +457,7 @@ fn load_vocab_defined_bpe(
     if let Some(pad_id) = extract_pad_token_id(data) {
         tokenizer.set_pad_token_id(pad_id);
     }
+    setup_added_tokens(&mut tokenizer, data);
     Ok(tokenizer)
 }
 
@@ -898,6 +900,7 @@ fn load_wordpiece(
     if let Some(pad_id) = extract_pad_token_id(data) {
         tokenizer.set_pad_token_id(pad_id);
     }
+    setup_added_tokens(&mut tokenizer, data);
     Ok(tokenizer)
 }
 
@@ -966,6 +969,7 @@ fn load_unigram(
     if let Some(pad_id) = extract_pad_token_id(data) {
         tokenizer.set_pad_token_id(pad_id);
     }
+    setup_added_tokens(&mut tokenizer, data);
     Ok(tokenizer)
 }
 
@@ -1065,6 +1069,40 @@ fn extract_pad_token_id(data: &serde_json::Value) -> Option<TokenId> {
     }
 
     None
+}
+
+/// Extract non-special added tokens from HuggingFace tokenizer.json.
+///
+/// These are tokens like multi-space/tab sequences that HF matches BEFORE
+/// pretokenization. Returns (token_id, bytes) pairs.
+fn extract_added_tokens(data: &serde_json::Value) -> Vec<(TokenId, Vec<u8>)> {
+    let Some(added) = data["added_tokens"].as_array() else {
+        return Vec::new();
+    };
+
+    added.iter().filter_map(|token| {
+        let special = token["special"].as_bool().unwrap_or(false);
+        if special {
+            return None;
+        }
+        let id = token["id"].as_u64()? as TokenId;
+        let content = token["content"].as_str()?;
+        // Only include tokens that contain whitespace patterns (spaces, tabs)
+        // to avoid interfering with regular vocab tokens
+        if content.len() >= 2 && content.bytes().all(|b| b == b' ' || b == b'\t') {
+            Some((id, content.as_bytes().to_vec()))
+        } else {
+            None
+        }
+    }).collect()
+}
+
+/// Set up added tokens on a tokenizer from HF JSON data.
+fn setup_added_tokens(tokenizer: &mut Tokenizer, data: &serde_json::Value) {
+    let added = extract_added_tokens(data);
+    if !added.is_empty() {
+        tokenizer.set_added_tokens(&added);
+    }
 }
 
 /// Look up a special token's ID from added_tokens or vocab.

@@ -11,6 +11,8 @@ use foldhash::HashMap as FoldHashMap;
 
 use chunk::chunk;
 
+use daggrs::{DoubleArrayAhoCorasick, MatchKind, Trie};
+
 use crate::encoder::{Encoder, EncoderIter, EncoderType};
 use crate::decoder::{Decoder, DecoderType};
 use crate::hf::{self, JsonLoadError};
@@ -57,6 +59,10 @@ pub struct Tokenizer {
     /// Runtime config, not serialized.
     truncation: Option<TruncationParams>,
     reverse_vocab: OnceLock<FoldHashMap<String, TokenId>>,
+    /// DAAC matcher for non-special added tokens (e.g., multi-space/tab sequences).
+    /// HF scans for these BEFORE pretokenization, splitting text at their boundaries.
+    /// None when there are no non-special added tokens.
+    added_tokens_matcher: Option<DoubleArrayAhoCorasick>,
 }
 
 impl Tokenizer {
@@ -79,7 +85,24 @@ impl Tokenizer {
             padding: None,
             truncation: None,
             reverse_vocab: OnceLock::new(),
+            added_tokens_matcher: None,
         }
+    }
+
+    /// Set added tokens matcher for non-special added tokens.
+    /// These are matched BEFORE pretokenization, like HuggingFace does.
+    pub fn set_added_tokens(&mut self, tokens: &[(TokenId, Vec<u8>)]) {
+        if tokens.is_empty() {
+            return;
+        }
+        let mut trie = Trie::new();
+        for (id, bytes) in tokens {
+            if !bytes.is_empty() {
+                trie.add(bytes, *id);
+            }
+        }
+        trie.build(MatchKind::LeftmostLongest);
+        self.added_tokens_matcher = Some(trie.compile());
     }
 
     pub fn pretokenizer_type(&self) -> PretokType { self.pretokenizer_type }
@@ -336,14 +359,59 @@ impl Tokenizer {
 
     /// Core encoding path: normalize + pretokenize + encode. No special tokens.
     fn encode_raw(&self, text: &str) -> Vec<TokenId> {
+        // If there are non-special added tokens, split the text at their boundaries first.
+        // HuggingFace scans for added tokens BEFORE pretokenization.
+        if let Some(ref matcher) = self.added_tokens_matcher {
+            return self.encode_with_added_tokens(text, matcher);
+        }
+
+        self.encode_raw_inner(text)
+    }
+
+    /// Encode text after splitting at added token boundaries.
+    fn encode_with_added_tokens(&self, text: &str, matcher: &DoubleArrayAhoCorasick) -> Vec<TokenId> {
+        let bytes = text.as_bytes();
+        let mut result = Vec::new();
+        let mut pos = 0;
+
+        for m in matcher.find_iter(bytes) {
+            // Encode text before this added token
+            if m.start > pos {
+                let segment = &text[pos..m.start];
+                result.extend(self.encode_raw_inner(segment));
+            }
+            // Insert the added token directly
+            result.push(m.pattern_id);
+            pos = m.end;
+        }
+
+        // Encode remaining text after last added token
+        if pos < text.len() {
+            let segment = &text[pos..];
+            result.extend(self.encode_raw_inner(segment));
+        }
+
+        result
+    }
+
+    /// Inner encoding without added token splitting.
+    fn encode_raw_inner(&self, text: &str) -> Vec<TokenId> {
+        // For models without pretokenizer (SentencePiece, Unigram), normalize the full
+        // text first and pass directly to the encoder. The encoder handles its own
+        // chunking at safe boundaries (metaspace). We must NOT use encode_parallel here
+        // because it splits raw text at spaces before normalization, which breaks:
+        // - Whitespace collapsing in SentencePiece normalizer (T5, XLM-R)
+        // - Metaspace sequence merging (Voyage-code-2, Voyage-law-2)
+        if self.pretokenizer.is_none() {
+            let normalized = self.normalizer.normalize(text);
+            return self.encoder.encode(normalized.as_ref().as_bytes());
+        }
+
         if text.len() >= Self::PARALLEL_CHUNK_THRESHOLD {
             self.encode_parallel(text, self.pretokenizer.as_ref())
         } else {
             let normalized = self.normalizer.normalize(text);
-            match &self.pretokenizer {
-                Some(pretok) => self.encode_sequential(normalized.as_ref(), pretok),
-                None => self.encoder.encode(normalized.as_ref().as_bytes()),
-            }
+            self.encode_sequential(normalized.as_ref(), self.pretokenizer.as_ref().unwrap())
         }
     }
 

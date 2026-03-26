@@ -143,11 +143,15 @@ impl HeapEntry {
 // RadixHeap (Internal)
 // =============================================================================
 
-/// A radix heap optimized for monotonic u64 keys.
+/// A radix heap optimized for monotonic u64 keys with overflow support.
 ///
-/// The radix heap exploits the property that BPE merge ranks are processed
-/// in increasing order. Once we pop rank k, we never see rank < k again.
-/// This gives O(1) amortized push and pop operations.
+/// The radix heap exploits the property that BPE merge ranks are typically
+/// processed in increasing order, giving O(1) amortized push and pop.
+///
+/// Some SentencePiece models (e.g., Voyage-code-2) have non-monotonic merge
+/// orderings where a merge at rank N creates symbols needed by rank M < N.
+/// These "backward" entries are stored in an overflow vector and checked
+/// on each pop. For monotonic models, the overflow stays empty (zero cost).
 ///
 /// Keys are composite: `(rank << 32) | position`, ensuring that ties
 /// (same rank) are broken by position (leftmost first).
@@ -160,6 +164,9 @@ struct RadixHeap {
     last_min: u64,
     /// Total number of entries.
     len: usize,
+    /// Overflow for entries with key < last_min (non-monotonic merges).
+    /// Empty for models with standard monotonic merge ordering.
+    overflow: Vec<HeapEntry>,
 }
 
 impl RadixHeap {
@@ -169,6 +176,7 @@ impl RadixHeap {
             buckets: std::array::from_fn(|_| Vec::new()),
             last_min: 0,
             len: 0,
+            overflow: Vec::new(),
         }
     }
 
@@ -186,8 +194,13 @@ impl RadixHeap {
     /// Push an entry onto the heap.
     #[inline]
     fn push(&mut self, entry: HeapEntry) {
-        let idx = self.bucket_index(entry.key);
-        self.buckets[idx].push(entry);
+        if entry.key < self.last_min {
+            // Non-monotonic: store in overflow (rare, only for models like Voyage-code-2)
+            self.overflow.push(entry);
+        } else {
+            let idx = self.bucket_index(entry.key);
+            self.buckets[idx].push(entry);
+        }
         self.len += 1;
     }
 
@@ -195,6 +208,44 @@ impl RadixHeap {
     fn pop(&mut self) -> Option<HeapEntry> {
         if self.len == 0 {
             return None;
+        }
+
+        // Check overflow first (non-monotonic backward entries)
+        if !self.overflow.is_empty() {
+            // Find minimum in overflow
+            let mut ov_min_idx = 0;
+            let mut ov_min_key = self.overflow[0].key;
+            for (i, entry) in self.overflow.iter().enumerate().skip(1) {
+                if entry.key < ov_min_key {
+                    ov_min_key = entry.key;
+                    ov_min_idx = i;
+                }
+            }
+
+            // Check if any normal bucket entry is smaller
+            let mut normal_bucket_idx = 0;
+            while normal_bucket_idx < 65 && self.buckets[normal_bucket_idx].is_empty() {
+                normal_bucket_idx += 1;
+            }
+
+            let normal_min_key = if normal_bucket_idx < 65 {
+                if normal_bucket_idx == 0 {
+                    // Bucket 0 entries all have key == last_min
+                    Some(self.last_min)
+                } else {
+                    self.buckets[normal_bucket_idx].iter().map(|e| e.key).min()
+                }
+            } else {
+                None
+            };
+
+            // If overflow minimum is smaller (or equal), pop from overflow
+            // Don't update last_min — overflow entries are below the monotonic frontier
+            if normal_min_key.is_none() || ov_min_key <= normal_min_key.unwrap() {
+                let entry = self.overflow.swap_remove(ov_min_idx);
+                self.len -= 1;
+                return Some(entry);
+            }
         }
 
         // Find first non-empty bucket
@@ -246,6 +297,7 @@ impl RadixHeap {
         }
         self.last_min = 0;
         self.len = 0;
+        self.overflow.clear();
     }
 }
 

@@ -18,12 +18,23 @@ use smallvec::SmallVec;
 
 use crate::types::TokenId;
 
-/// Default chunk size for chunked encoding.
-/// 64KB chunks keep memory usage low (~5MB for DP arrays).
-const DEFAULT_CHUNK_SIZE: usize = 64 * 1024; // 64KB chunks
+/// Get the length of a UTF-8 character from its first byte.
+#[inline]
+fn utf8_char_len(b: u8) -> usize {
+    match b {
+        0..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xFF => 4,
+        _ => 1,
+    }
+}
 
-/// Overlap size for boundary reconciliation (must be > max token length).
-const OVERLAP_SIZE: usize = 256;
+/// Default chunk size for chunked encoding.
+/// 4MB keeps memory reasonable (~160MB for DP arrays) while minimizing
+/// boundary effects from Viterbi DP. Most real-world inputs are <4MB.
+const DEFAULT_CHUNK_SIZE: usize = 4 * 1024 * 1024; // 4MB chunks
+
 
 /// Unigram encoder using Viterbi dynamic programming.
 #[derive(Clone)]
@@ -253,8 +264,10 @@ impl UnigramEncoder {
         let mut backptr: Vec<(TokenId, usize)> = vec![(0, 0); n + 1];
         best_score[0] = 0.0;
 
-        // Penalty for unknown tokens (very negative to prefer any real token)
-        const UNK_PENALTY: f64 = -100.0;
+        // Use the actual <unk> token score from the model.
+        // For T5, <unk> has score 0.0, so Viterbi prefers <unk> over low-scoring tokens.
+        // Using a hardcoded -100.0 would change this behavior and produce different results.
+        let unk_penalty = self.scores[self.unk_token as usize] as f64;
 
         // OPTIMIZATION: Group matches by start position using SmallVec
         // Most positions have few matches, so SmallVec avoids heap allocation
@@ -296,11 +309,15 @@ impl UnigramEncoder {
                     backptr[pos + 1] = (byte_token, pos);
                 }
             } else if !has_match {
-                // No DAAC match and no byte fallback: use <unk>
-                let new_score = current_score + UNK_PENALTY;
-                if new_score > best_score[pos + 1] {
-                    best_score[pos + 1] = new_score;
-                    backptr[pos + 1] = (self.unk_token, pos);
+                // No DAAC match and no byte fallback: use <unk> for the entire
+                // UTF-8 character (not just one byte). SentencePiece Unigram
+                // treats each unknown character as one <unk> token.
+                let char_len = utf8_char_len(text[pos]);
+                let end = (pos + char_len).min(n);
+                let new_score = current_score + unk_penalty;
+                if new_score > best_score[end] {
+                    best_score[end] = new_score;
+                    backptr[end] = (self.unk_token, pos);
                 }
             }
         }
@@ -315,6 +332,9 @@ impl UnigramEncoder {
     }
 
     /// Collect tokens from backpointer array (backward pass of Viterbi).
+    /// Consecutive `<unk>` tokens are collapsed into a single `<unk>`,
+    /// matching SentencePiece behavior where unknown character runs
+    /// produce exactly one `<unk>` token.
     #[inline]
     fn collect_tokens_from_backptr(&self, backptr: &[(TokenId, usize)], end: usize) -> Vec<TokenId> {
         let mut tokens = Vec::new();
@@ -325,23 +345,15 @@ impl UnigramEncoder {
             pos = start_pos;
         }
         tokens.reverse();
+
+        // Collapse consecutive <unk> tokens into one
+        if tokens.contains(&self.unk_token) {
+            tokens.dedup_by(|a, b| *a == self.unk_token && *b == self.unk_token);
+        }
+
         tokens
     }
 
-    /// Collect tokens with their byte spans from backpointer array.
-    /// Returns Vec<(token_id, start_pos, end_pos)>.
-    #[inline]
-    fn collect_tokens_with_spans(&self, backptr: &[(TokenId, usize)], end: usize) -> Vec<(TokenId, usize, usize)> {
-        let mut tokens = Vec::new();
-        let mut pos = end;
-        while pos > 0 {
-            let (token_id, start_pos) = backptr[pos];
-            tokens.push((token_id, start_pos, pos));
-            pos = start_pos;
-        }
-        tokens.reverse();
-        tokens
-    }
 
     /// Encode with <unk> bridging for positions that couldn't be reached.
     fn encode_with_unk_bridging(
@@ -400,14 +412,9 @@ impl UnigramEncoder {
 
     /// Encode text using chunked processing for better memory efficiency.
     ///
-    /// For large texts, this splits at space/newline boundaries and encodes
-    /// each chunk separately. This keeps Viterbi DP arrays small (~10MB per chunk)
-    /// instead of allocating gigabytes for large inputs.
-    ///
-    /// Unlike BPE, Unigram can safely chunk at any position because:
-    /// 1. No merge dependencies between chunks
-    /// 2. Each chunk's optimal segmentation is independent
-    /// 3. Total score is just the sum of chunk scores
+    /// For large texts, this splits at metaspace (▁) boundaries and encodes
+    /// each chunk separately. Metaspace marks word boundaries in SentencePiece
+    /// models, so chunking there preserves correct Viterbi segmentation.
     ///
     /// # Arguments
     ///
@@ -423,124 +430,26 @@ impl UnigramEncoder {
         }
 
         let mut result = Vec::with_capacity(text.len() / 3);
-        let mut pos = 0;
 
-        while pos < text.len() {
-            let remaining = text.len() - pos;
+        // Chunk at metaspace (▁) boundaries for correct Viterbi results.
+        // Metaspace marks word boundaries in SentencePiece; the optimal Viterbi
+        // path always includes a token boundary at these positions.
+        static METASPACE: [u8; 3] = [0xE2, 0x96, 0x81];
 
-            if remaining <= chunk_size {
-                // Last chunk: encode to the end
-                let chunk_tokens = self.encode_single(&text[pos..]);
-                result.extend_from_slice(&chunk_tokens);
-                break;
-            }
-
-            // Encode chunk with overlap for boundary reconciliation
-            let chunk_end = pos + chunk_size;
-            let extended_end = (chunk_end + OVERLAP_SIZE).min(text.len());
-            let chunk = &text[pos..extended_end];
-
-            // Get tokens with their byte spans (relative to chunk start)
-            let tokens_with_spans = self.encode_single_with_spans(chunk);
-
-            if tokens_with_spans.is_empty() {
-                pos = extended_end;
-                continue;
-            }
-
-            // Find the last token that ends at or before the target boundary
-            let target_boundary = chunk_size; // Relative to chunk start
-            let mut cut_index = tokens_with_spans.len();
-            let mut cut_pos = chunk.len();
-
-            for (i, &(_token_id, _start, end)) in tokens_with_spans.iter().enumerate() {
-                if end <= target_boundary {
-                    cut_index = i + 1;
-                    cut_pos = end;
-                } else if end > target_boundary {
-                    // This token crosses the boundary
-                    // Use the previous token as the cut point
-                    break;
-                }
-            }
-
-            // Add tokens up to the cut point
-            for &(token_id, _, _) in &tokens_with_spans[..cut_index] {
-                result.push(token_id);
-            }
-
-            // Move position forward
-            pos += cut_pos;
+        for chunk_bytes in chunk::chunk(text)
+            .size(chunk_size)
+            .pattern(&METASPACE)
+            .prefix()
+            .consecutive()
+            .forward_fallback()
+        {
+            let chunk_tokens = self.encode_single(chunk_bytes);
+            result.extend_from_slice(&chunk_tokens);
         }
 
         result
     }
 
-    /// Encode a single chunk and return tokens with their byte spans.
-    /// Returns Vec<(token_id, start_pos, end_pos)> where positions are relative to input start.
-    fn encode_single_with_spans(&self, text: &[u8]) -> Vec<(TokenId, usize, usize)> {
-        if text.is_empty() {
-            return Vec::new();
-        }
-
-        let n = text.len();
-        let mut best_score = vec![f64::NEG_INFINITY; n + 1];
-        let mut backptr: Vec<(TokenId, usize)> = vec![(0, 0); n + 1];
-        best_score[0] = 0.0;
-
-        const UNK_PENALTY: f64 = -100.0;
-
-        // Group matches by start position
-        type MatchList = SmallVec<[(usize, TokenId); 8]>;
-        let mut matches_at: Vec<MatchList> = vec![SmallVec::new(); n];
-
-        for m in self.matcher.find_iter(text) {
-            matches_at[m.start].push((m.end, m.pattern_id));
-        }
-
-        // Forward pass
-        for pos in 0..n {
-            if best_score[pos] == f64::NEG_INFINITY {
-                continue;
-            }
-
-            let current_score = best_score[pos];
-            let has_match = !matches_at[pos].is_empty();
-
-            for &(end, token_id) in &matches_at[pos] {
-                let token_score = self.scores[token_id as usize] as f64;
-                let new_score = current_score + token_score;
-                if new_score > best_score[end] {
-                    best_score[end] = new_score;
-                    backptr[end] = (token_id, pos);
-                }
-            }
-
-            let byte_val = text[pos];
-            let byte_token = self.byte_tokens[byte_val as usize];
-            if byte_token != u32::MAX {
-                let token_score = self.scores[byte_token as usize] as f64;
-                let new_score = current_score + token_score;
-                if new_score > best_score[pos + 1] {
-                    best_score[pos + 1] = new_score;
-                    backptr[pos + 1] = (byte_token, pos);
-                }
-            } else if !has_match {
-                let new_score = current_score + UNK_PENALTY;
-                if new_score > best_score[pos + 1] {
-                    best_score[pos + 1] = new_score;
-                    backptr[pos + 1] = (self.unk_token, pos);
-                }
-            }
-        }
-
-        if best_score[n] == f64::NEG_INFINITY {
-            // Fallback: return empty (encode_single handles this case)
-            return Vec::new();
-        }
-
-        self.collect_tokens_with_spans(&backptr, n)
-    }
 
     /// Encode using default chunk size (64KB).
     #[inline]

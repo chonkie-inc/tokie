@@ -174,7 +174,10 @@ impl Tokenizer {
 
         // Try tokenizer.tkz first (faster to load, smaller to download)
         if let Ok(tkz_path) = repo_api.get("tokenizer.tkz") {
-            return Self::from_file(tkz_path).map_err(HubError::LoadBinary);
+            let mut tokenizer = Self::from_file(tkz_path).map_err(HubError::LoadBinary)?;
+            // .tkz doesn't store added tokens — try to get them from tokenizer.json
+            load_added_tokens_from_json(&mut tokenizer, &repo_api);
+            return Ok(tokenizer);
         }
 
         // Try pre-built .tkz from tokiers/ org (covers 60+ popular models)
@@ -182,13 +185,42 @@ impl Tokenizer {
             let tokiers_repo = Repo::model(format!("tokiers/{tokiers_name}"));
             let tokiers_api = api.repo(tokiers_repo);
             if let Ok(tkz_path) = tokiers_api.get("tokenizer.tkz") {
-                return Self::from_file(tkz_path).map_err(HubError::LoadBinary);
+                let mut tokenizer = Self::from_file(tkz_path).map_err(HubError::LoadBinary)?;
+                // Try original repo's tokenizer.json for added tokens
+                load_added_tokens_from_json(&mut tokenizer, &repo_api);
+                return Ok(tokenizer);
             }
         }
 
         // Fall back to tokenizer.json
         let tokenizer_path = repo_api.get("tokenizer.json").map_err(HubError::Download)?;
         Self::from_json(tokenizer_path).map_err(HubError::Load)
+    }
+}
+
+/// Try to load non-special added tokens from tokenizer.json and set them on the tokenizer.
+/// This is needed because .tkz format doesn't store added token info.
+/// Silently does nothing if tokenizer.json isn't available or has no added tokens.
+fn load_added_tokens_from_json(tokenizer: &mut Tokenizer, repo_api: &hf_hub::api::sync::ApiRepo) {
+    let Ok(json_path) = repo_api.get("tokenizer.json") else { return };
+    let Ok(json_bytes) = std::fs::read(&json_path) else { return };
+    let Ok(data) = serde_json::from_slice::<serde_json::Value>(&json_bytes) else { return };
+
+    let Some(added) = data["added_tokens"].as_array() else { return };
+    let tokens: Vec<(crate::types::TokenId, Vec<u8>)> = added.iter().filter_map(|token| {
+        let special = token["special"].as_bool().unwrap_or(false);
+        if special { return None; }
+        let id = token["id"].as_u64()? as crate::types::TokenId;
+        let content = token["content"].as_str()?;
+        if content.len() >= 2 && content.bytes().all(|b| b == b' ' || b == b'\t') {
+            Some((id, content.as_bytes().to_vec()))
+        } else {
+            None
+        }
+    }).collect();
+
+    if !tokens.is_empty() {
+        tokenizer.set_added_tokens(&tokens);
     }
 }
 
