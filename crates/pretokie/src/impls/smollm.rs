@@ -111,8 +111,12 @@ impl<'a> Iterator for SmolLM<'a> {
                     if ch.is_alphabetic() {
                         self.scan_letters();
                     }
+                } else if next != b' ' && next != b'\n' && next != b'\r' && !is_digit(next) {
+                    // Space prefixes punctuation (but NOT digits in SmolLM)
+                    self.pos += 1;
+                    self.scan_punct();
                 }
-                // Note: NO digit prefix — space before digit is just a bare space
+                // else: bare space
             }
         } else if b == b'\'' {
             let clen = self.check_contraction();

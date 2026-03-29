@@ -122,8 +122,12 @@ impl<'a> Iterator for Gpt2<'a> {
                 } else if is_digit(next) {
                     self.pos += 1;
                     self.scan_digits();
+                } else if next != b' ' && next != b'\n' && next != b'\r' {
+                    // Space prefixes punctuation: ` ?[^\s\p{L}\p{N}]+`
+                    self.pos += 1;
+                    self.scan_punct();
                 }
-                // else: bare space
+                // else: bare space (before another space or newline)
             }
         } else if b == b'\'' {
             let clen = self.check_contraction();
