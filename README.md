@@ -202,7 +202,7 @@ All results on Apple M3 Pro, single-string encode, median of 10 runs.
 
 100% token-accurate across all models. Batch encoding is 4-6x faster than HF and 2-3x faster than kitoken.
 
-\* kitoken produces incorrect output on Gemma 3 SentencePiece (13% more tokens, diverges at token 93). Speedup comparison not meaningful for incorrect output.
+\* kitoken produces incorrect output on Gemma 3 SentencePiece (13% more tokens, diverges at token 93 — [reported](https://github.com/Systemcluster/kitoken/issues/3)). Speedup comparison not meaningful for incorrect output.
 
 ### Tokenizer Loading
 
