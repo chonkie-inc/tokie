@@ -165,7 +165,13 @@ impl<'a> Iterator for Qwen<'a> {
                     while self.pos < self.len && self.at(self.pos) == b' ' {
                         self.pos += 1;
                     }
-                    if self.pos < self.len && self.pos > start + 1 {
+                    if self.pos < self.len && (self.at(self.pos) == b'\n' || self.at(self.pos) == b'\r') {
+                        while self.pos < self.len {
+                            let c = self.at(self.pos);
+                            if c == b' ' || c == b'\n' || c == b'\r' || c == b'\t' { self.pos += 1; }
+                            else { break; }
+                        }
+                    } else if self.pos < self.len && self.pos > start + 1 {
                         let next = self.at(self.pos);
                         if next != b' ' && next != b'\n' && next != b'\r' && next != b'\t' {
                             self.pos -= 1;

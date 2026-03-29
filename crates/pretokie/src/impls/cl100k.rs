@@ -185,14 +185,20 @@ impl<'a> Iterator for Cl100k<'a> {
                     self.pos += 1;
                     self.scan_punct_with_newlines();
                 } else {
-                    // Group consecutive spaces, then back up one if followed
-                    // by non-whitespace (so last space can prefix next piece).
+                    // Whitespace handling: group spaces, check what follows
                     self.pos += 1;
                     while self.pos < self.len && self.at(self.pos) == b' ' {
                         self.pos += 1;
                     }
-                    // Back up: leave last space for prefix if non-ws follows
-                    if self.pos < self.len && self.pos > start + 1 {
+                    // If we hit a newline, merge everything: `\s*[\r\n]+`
+                    if self.pos < self.len && (self.at(self.pos) == b'\n' || self.at(self.pos) == b'\r') {
+                        while self.pos < self.len {
+                            let c = self.at(self.pos);
+                            if c == b' ' || c == b'\n' || c == b'\r' || c == b'\t' { self.pos += 1; }
+                            else { break; }
+                        }
+                    } else if self.pos < self.len && self.pos > start + 1 {
+                        // No newline: back up last space for prefix
                         let next = self.at(self.pos);
                         if next != b' ' && next != b'\n' && next != b'\r' && next != b'\t' {
                             self.pos -= 1;
