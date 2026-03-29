@@ -152,21 +152,21 @@ tokenizer = tokie.Tokenizer.from_file("model.tkz")
 
 All benchmarks run on 1 MB of enwik8 on an Apple M3 Pro. tokie produces **identical output** to HuggingFace tokenizers — every token matches, every time.
 
-### BPE Encoding (GPT-2, Llama, Mistral)
+### BPE Encoding (GPT-2, Llama, Qwen, ModernBERT)
 
-For tiktoken-style BPE models (GPT-2, cl100k, o200k, Llama 3), tokie uses a backtracking encoder built on an Aho-Corasick automaton. Instead of iteratively merging byte pairs, it does a greedy longest-match in O(n) time, with backtracking only when adjacent tokens form invalid pairs. Combined with parallel chunking across all cores, this gives **321 MB/s** — 58x faster than HuggingFace and 19-23x faster than tiktoken.
+For tiktoken-style BPE models, tokie uses a backtracking encoder built on an Aho-Corasick automaton. Instead of iteratively merging byte pairs, it does a greedy longest-match in O(n) time, with backtracking only when adjacent tokens form invalid pairs. Combined with parallel chunking across all cores and hand-coded pretokenizers from [pretokie](https://crates.io/crates/pretokie), this gives **10-17x faster** than HuggingFace and **1.4-3.1x faster** than kitoken.
 
 ![BPE encoding speed](assets/benchmark.png)
 
 ### WordPiece (BERT, MiniLM, BGE, GTE)
 
-WordPiece tokenizers use a different algorithm — greedy longest-match prefix search over a vocabulary trie. tokie uses a pre-built Double-Array trie for O(n) lookup with excellent cache locality, combined with a custom BERT pretokenizer that avoids regex entirely. The result is **79x faster** than HuggingFace tokenizers on BERT, with identical output.
+WordPiece tokenizers use a different algorithm — greedy longest-match prefix search over a vocabulary trie. tokie uses a pre-built Double-Array trie for O(n) lookup with excellent cache locality, combined with a specialized BERT pretokenizer. The result is **15-20x faster** than HuggingFace and **2.9-3.6x faster** than kitoken on BERT, with identical output.
 
 ![WordPiece encoding speed](assets/benchmark_wordpiece.png)
 
-### SentencePiece BPE & Unigram (XLM-R, T5, Voyage)
+### SentencePiece BPE & Unigram (Gemma, XLM-R, T5)
 
-SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property, with overflow support for models (like Voyage-code-2) that have non-monotonic merge orderings. Text is chunked at metaspace boundaries using SIMD-accelerated splitting, then encoded in parallel. This gives **4x** faster throughput than HuggingFace tokenizers.
+SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property. This is tokie's weakest area — **1.1-1.3x faster** than HuggingFace but **kitoken is 1.7x faster** than tokie on Gemma 3. Improving SentencePiece performance is a priority.
 
 ![SentencePiece BPE speed](assets/benchmark_sentencepiece.png)
 
