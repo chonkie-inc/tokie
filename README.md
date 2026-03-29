@@ -166,7 +166,7 @@ WordPiece tokenizers use a different algorithm — greedy longest-match prefix s
 
 ### SentencePiece BPE & Unigram (Gemma, XLM-R, T5)
 
-SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property. This is tokie's weakest area — **1.1-1.3x faster** than HuggingFace but **kitoken is 1.7x faster** than tokie on Gemma 3. Improving SentencePiece performance is a priority.
+SentencePiece-style models use a different merge algorithm with non-topological rank orders. tokie uses a radix heap with O(1) amortized operations that exploits BPE's monotonic rank property. tokie is **1.3x faster** than HuggingFace on Gemma 3. Note: kitoken appears faster in raw throughput but produces incorrect output on SentencePiece models (13% more tokens, mismatches starting at token 93 on Gemma 3).
 
 ![SentencePiece BPE speed](assets/benchmark_sentencepiece.png)
 
@@ -188,8 +188,8 @@ All results on Apple M3 Pro, single-string encode, median of 10 runs.
 | Qwen 3 | 900 KB | 15.8 ms | 270 ms | 49.3 ms | **17x** | **3.1x** |
 | ModernBERT | 45 KB | 1.11 ms | 10.0 ms | 1.76 ms | **9x** | **1.6x** |
 | ModernBERT | 900 KB | 26.7 ms | 276 ms | 50.7 ms | **10x** | **1.9x** |
-| Gemma 3 | 45 KB | 9.29 ms | 10.6 ms | 5.01 ms | 1.1x | 0.5x |
-| Gemma 3 | 900 KB | 160 ms | 214 ms | 93.7 ms | 1.3x | 0.6x |
+| Gemma 3 | 45 KB | 9.29 ms | 10.6 ms | 5.01 ms* | 1.1x | — |
+| Gemma 3 | 900 KB | 160 ms | 214 ms | 93.7 ms* | 1.3x | — |
 
 #### tokie vs tiktoken (OpenAI models)
 
@@ -201,6 +201,8 @@ All results on Apple M3 Pro, single-string encode, median of 10 runs.
 | o200k (GPT-4o) | 900 KB | 17.5 ms | 97.4 ms | **5.6x** |
 
 100% token-accurate across all models. Batch encoding is 4-6x faster than HF and 2-3x faster than kitoken.
+
+\* kitoken produces incorrect output on Gemma 3 SentencePiece (13% more tokens, diverges at token 93). Speedup comparison not meaningful for incorrect output.
 
 ### Tokenizer Loading
 
