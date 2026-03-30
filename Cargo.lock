@@ -1180,16 +1180,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pretokie"
-version = "0.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a03198d2557d2060eb79b40776dfd537ed8ea6830afa407d1847dd9348cf250b"
-dependencies = [
- "regex-automata",
- "unicode-general-category",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1716,7 +1706,7 @@ dependencies = [
  "hf-hub",
  "icu_normalizer 1.5.0",
  "memchr",
- "pretokie 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pretokie",
  "serde",
  "serde_json",
  "smallvec",

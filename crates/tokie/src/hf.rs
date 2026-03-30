@@ -946,6 +946,9 @@ fn load_wordpiece(
     let continuation_prefix = model["continuing_subword_prefix"]
         .as_str()
         .unwrap_or("##");
+    let max_input_chars_per_word = model["max_input_chars_per_word"]
+        .as_u64()
+        .unwrap_or(100) as usize;
 
     // Build vocabulary mapping sorted by id
     let mut vocab: Vec<(String, u32)> = vocab_map
@@ -978,6 +981,7 @@ fn load_wordpiece(
         &vocab_pairs,
         unk_token,
         continuation_prefix.as_bytes(),
+        max_input_chars_per_word,
     );
 
     // Build decoder

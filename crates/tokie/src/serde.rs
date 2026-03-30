@@ -532,7 +532,7 @@ impl Tokenizer {
                     })
                     .collect();
 
-                let (unk_token, continuation_prefix) = deserialize_wordpiece_config(merge_data)?;
+                let (unk_token, continuation_prefix, max_input_chars_per_word) = deserialize_wordpiece_config(merge_data)?;
                 let (daac, _) = DoubleArrayAhoCorasick::deserialize(daac_data)
                     .ok_or(SerdeError::InvalidData("failed to deserialize DAAC"))?;
 
@@ -542,6 +542,7 @@ impl Tokenizer {
                     continuation_prefix,
                     vocab_size,
                     &token_bytes,
+                    max_input_chars_per_word,
                 );
                 Encoder::WordPiece(enc)
             }
@@ -976,20 +977,21 @@ fn rebuild_pair_lookup(
     lookup
 }
 
-/// Serialize WordPiece encoder config (unk_token + continuation_prefix).
+/// Serialize WordPiece encoder config (unk_token + continuation_prefix + max_input_chars_per_word).
 ///
-/// Format: unk_token (u32) + prefix_len (u32) + prefix bytes
+/// Format: unk_token (u32) + prefix_len (u32) + prefix bytes + max_input_chars_per_word (u32)
 fn serialize_wordpiece_config(enc: &WordPieceEncoder) -> Vec<u8> {
     let prefix = enc.continuation_prefix();
-    let mut buf = Vec::with_capacity(8 + prefix.len());
+    let mut buf = Vec::with_capacity(12 + prefix.len());
     buf.extend_from_slice(&enc.unk_token().to_le_bytes());
     buf.extend_from_slice(&(prefix.len() as u32).to_le_bytes());
     buf.extend_from_slice(prefix);
+    buf.extend_from_slice(&(enc.max_input_chars_per_word() as u32).to_le_bytes());
     buf
 }
 
 /// Deserialize WordPiece encoder config.
-fn deserialize_wordpiece_config(data: &[u8]) -> Result<(TokenId, Vec<u8>), SerdeError> {
+fn deserialize_wordpiece_config(data: &[u8]) -> Result<(TokenId, Vec<u8>, usize), SerdeError> {
     if data.len() < 8 {
         return Err(SerdeError::InvalidData("wordpiece config too small"));
     }
@@ -1002,7 +1004,15 @@ fn deserialize_wordpiece_config(data: &[u8]) -> Result<(TokenId, Vec<u8>), Serde
     }
 
     let continuation_prefix = data[8..8 + prefix_len].to_vec();
-    Ok((unk_token, continuation_prefix))
+
+    // Backward compatible: older .tkz files may not have this field
+    let max_input_chars_per_word = if data.len() >= 8 + prefix_len + 4 {
+        u32::from_le_bytes(data[8 + prefix_len..12 + prefix_len].try_into().unwrap()) as usize
+    } else {
+        100 // HF default
+    };
+
+    Ok((unk_token, continuation_prefix, max_input_chars_per_word))
 }
 
 /// Serialize Unigram encoder config.

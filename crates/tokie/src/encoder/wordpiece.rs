@@ -41,6 +41,10 @@ pub struct WordPieceEncoder {
 
     /// Multi-byte token cache for early exit.
     token_cache: FoldHashMap<Vec<u8>, TokenId>,
+
+    /// Maximum number of characters per word before falling back to UNK.
+    /// HuggingFace default is 100. Words longer than this return `[unk_token]`.
+    max_input_chars_per_word: usize,
 }
 
 impl WordPieceEncoder {
@@ -54,6 +58,7 @@ impl WordPieceEncoder {
         vocab: &[(Vec<u8>, TokenId)],
         unk_token: TokenId,
         continuation_prefix: &[u8],
+        max_input_chars_per_word: usize,
     ) -> Self {
         let mut trie = Trie::new();
 
@@ -91,12 +96,13 @@ impl WordPieceEncoder {
             vocab_size: vocab.len(),
             byte_lut,
             token_cache,
+            max_input_chars_per_word,
         }
     }
 
-    /// Create a WordPiece encoder from vocabulary with default "##" prefix.
+    /// Create a WordPiece encoder from vocabulary with default "##" prefix and max 100 chars.
     pub fn from_vocab_default(vocab: &[(Vec<u8>, TokenId)], unk_token: TokenId) -> Self {
-        Self::from_vocab(vocab, unk_token, DEFAULT_CONTINUATION_PREFIX)
+        Self::from_vocab(vocab, unk_token, DEFAULT_CONTINUATION_PREFIX, 100)
     }
 
     /// Create a WordPiece encoder from pre-built components (for fast deserialization).
@@ -108,6 +114,7 @@ impl WordPieceEncoder {
         continuation_prefix: Vec<u8>,
         vocab_size: usize,
         token_bytes: &[Vec<u8>],
+        max_input_chars_per_word: usize,
     ) -> Self {
         // Build single-byte fast path array
         let mut byte_lut = [unk_token; 256];
@@ -132,6 +139,7 @@ impl WordPieceEncoder {
             vocab_size,
             byte_lut,
             token_cache,
+            max_input_chars_per_word,
         }
     }
 
@@ -142,6 +150,17 @@ impl WordPieceEncoder {
     pub fn encode(&self, word: &[u8]) -> Vec<TokenId> {
         if word.is_empty() {
             return Vec::new();
+        }
+
+        // HF WordPiece: words exceeding max_input_chars_per_word → UNK
+        // Count UTF-8 characters, not bytes
+        if word.len() > self.max_input_chars_per_word {
+            let char_count = std::str::from_utf8(word)
+                .map(|s| s.chars().count())
+                .unwrap_or(word.len());
+            if char_count > self.max_input_chars_per_word {
+                return vec![self.unk_token];
+            }
         }
 
         // Single-byte fast path: direct array lookup (no hashing)
@@ -244,6 +263,11 @@ impl WordPieceEncoder {
     /// Get a reference to the underlying DAAC matcher.
     pub fn matcher(&self) -> &DoubleArrayAhoCorasick {
         &self.matcher
+    }
+
+    /// Get the maximum input characters per word.
+    pub fn max_input_chars_per_word(&self) -> usize {
+        self.max_input_chars_per_word
     }
 
     /// Check if two tokens can appear adjacent.
