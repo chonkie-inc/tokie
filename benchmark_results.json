@@ -1,0 +1,162 @@
+{
+  "vs_hf": [
+    {
+      "model": "BERT",
+      "size": "45 KB",
+      "tokie_ms": 0.56,
+      "hf_ms": 10.9,
+      "speedup": 20,
+      "tokens": 10002
+    },
+    {
+      "model": "BERT",
+      "size": "900 KB",
+      "tokie_ms": 9.84,
+      "hf_ms": 280.6,
+      "speedup": 29,
+      "tokens": 200002
+    },
+    {
+      "model": "GPT-2",
+      "size": "45 KB",
+      "tokie_ms": 0.51,
+      "hf_ms": 8.5,
+      "speedup": 17,
+      "tokens": 10001
+    },
+    {
+      "model": "GPT-2",
+      "size": "900 KB",
+      "tokie_ms": 9.42,
+      "hf_ms": 209.2,
+      "speedup": 22,
+      "tokens": 200001
+    },
+    {
+      "model": "Llama 3",
+      "size": "45 KB",
+      "tokie_ms": 0.58,
+      "hf_ms": 8.5,
+      "speedup": 15,
+      "tokens": 10002
+    },
+    {
+      "model": "Llama 3",
+      "size": "900 KB",
+      "tokie_ms": 9.45,
+      "hf_ms": 210.8,
+      "speedup": 22,
+      "tokens": 200002
+    },
+    {
+      "model": "Qwen 3",
+      "size": "45 KB",
+      "tokie_ms": 0.55,
+      "hf_ms": 9.3,
+      "speedup": 17,
+      "tokens": 10001
+    },
+    {
+      "model": "Qwen 3",
+      "size": "900 KB",
+      "tokie_ms": 9.58,
+      "hf_ms": 230.1,
+      "speedup": 24,
+      "tokens": 200001
+    },
+    {
+      "model": "ModernBERT",
+      "size": "45 KB",
+      "tokie_ms": 0.52,
+      "hf_ms": 10.2,
+      "speedup": 20,
+      "tokens": 10003
+    },
+    {
+      "model": "ModernBERT",
+      "size": "900 KB",
+      "tokie_ms": 9.75,
+      "hf_ms": 236.3,
+      "speedup": 24,
+      "tokens": 200003
+    },
+    {
+      "model": "Gemma 3",
+      "size": "45 KB",
+      "tokie_ms": 5.2,
+      "hf_ms": 11.6,
+      "speedup": 2,
+      "tokens": 10002
+    },
+    {
+      "model": "Gemma 3",
+      "size": "900 KB",
+      "tokie_ms": 131.07,
+      "hf_ms": 329.5,
+      "speedup": 3,
+      "tokens": 200002
+    }
+  ],
+  "vs_tiktoken": [
+    {
+      "model": "cl100k (GPT-4)",
+      "size": "45 KB",
+      "tokie_ms": 0.69,
+      "tiktoken_ms": 2.37,
+      "speedup": 3.5
+    },
+    {
+      "model": "cl100k (GPT-4)",
+      "size": "900 KB",
+      "tokie_ms": 9.63,
+      "tiktoken_ms": 45.67,
+      "speedup": 4.7
+    },
+    {
+      "model": "o200k (GPT-4o)",
+      "size": "45 KB",
+      "tokie_ms": 0.52,
+      "tiktoken_ms": 4.1,
+      "speedup": 7.9
+    },
+    {
+      "model": "o200k (GPT-4o)",
+      "size": "900 KB",
+      "tokie_ms": 9.83,
+      "tiktoken_ms": 81.47,
+      "speedup": 8.3
+    }
+  ],
+  "loading": [
+    {
+      "model": "BERT",
+      "tokie_ms": 120.2,
+      "hf_ms": 98.1,
+      "speedup": 0.8
+    },
+    {
+      "model": "GPT-2",
+      "tokie_ms": 121.1,
+      "hf_ms": 129.6,
+      "speedup": 1.1
+    },
+    {
+      "model": "Llama 3.2",
+      "tokie_ms": 177.8,
+      "hf_ms": 252.5,
+      "speedup": 1.4
+    },
+    {
+      "model": "cl100k",
+      "tokie_ms": 56.0,
+      "hf_ms": 177.8,
+      "speedup": 3.2
+    },
+    {
+      "model": "o200k",
+      "tokie_ms": 122.5,
+      "hf_ms": 288.9,
+      "speedup": 2.4
+    }
+  ]
+}
