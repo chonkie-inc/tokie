@@ -6,6 +6,16 @@ pub fn is_ascii_letter(b: u8) -> bool {
 }
 
 #[inline(always)]
+pub fn is_lower(b: u8) -> bool {
+    b.wrapping_sub(b'a') < 26
+}
+
+#[inline(always)]
+pub fn is_upper(b: u8) -> bool {
+    b.wrapping_sub(b'A') < 26
+}
+
+#[inline(always)]
 pub fn is_digit(b: u8) -> bool {
     b.wrapping_sub(b'0') < 10
 }
