@@ -44,6 +44,8 @@ pip install tokie
 tokie = { version = "0.0.8", features = ["hf"] }
 ```
 
+Coming from HuggingFace `tokenizers`? See the [migration guide](docs/MIGRATION.md).
+
 ## Quick Start
 
 ### Python
@@ -237,6 +239,8 @@ Loading a tokenizer from `tokenizer.json` requires JSON parsing, vocabulary cons
 ## Verified Tokenizers
 
 Every tokenizer below is tested against the original HuggingFace tokenizer on 1MB of [enwik8](https://mattmahoney.net/dc/textdata.html) (~300K tokens) in [CI](../../actions/workflows/tokenizer-accuracy.yml). **Pass** = every token matches.
+
+For the full compatibility and performance matrix across every model family, see [docs/TOKENIZERS.md](docs/TOKENIZERS.md).
 
 <details>
 <summary><b>View full accuracy table (74 models)</b></summary>
