@@ -36,7 +36,9 @@ models/
 CLAUDE.md
 work.log
 __pycache__
-CATSU_TOKENIZERS_TODO.md
+
+# Generated benchmark output
+benchmark_results.json
 
 # Claude Code session state and agent worktrees
 .claude/
